@@ -31,7 +31,7 @@ jobs:
           # On affiche les résultats sous forme de tableau dans les logs
           format: 'pretty'
           # Fait échouer le build si le score de risque est supérieur à un certain seuil
-          threshold: 70 # Exemple : exige un score de conformité d'au moins 70%
+          threshold: 80 # Exemple : exige un score de conformité d'au moins 70%
 
       # ===================================================================
       # ÉTAPE DE VALIDATION DU FRONTEND
