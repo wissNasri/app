@@ -1,53 +1,57 @@
-# Nom du fichier : .github/workflows/full-validation-tolerant-with-warning.yml
+# Nom du fichier : .github/workflows/professional-ci-pipeline.yml
 
-name: Full Validation Pipeline (Tolerant Mode with Warning)
+name: Professional CI Pipeline with SARIF Reporting
 
-on: [push]
+# Se déclenche sur les Pull Requests vers la branche master
+on:
+  pull_request:
+    branches: [ master ]
+    paths:
+      - 'quiz-app/**' # Ne se déclenche que si le code du frontend change
+      - '.github/workflows/professional-ci-pipeline.yml' # Se déclenche aussi si on modifie le pipeline lui-même
 
 jobs:
-  full-validation:
-    name: "Full Validation (Frontend, IaC, K8s)"
+  security-and-validation:
+    name: "Security Validation and Build"
     runs-on: ubuntu-latest
+
+    # --- PERMISSIONS CRUCIALES POUR LA SOLUTION SARIF ---
+    permissions:
+      contents: read          # Pour checkout le code
+      security-events: write # Pour téléverser les rapports SARIF vers l'onglet Security
 
     steps:
       - name: "1. Checkout Code"
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Nécessaire pour que Gitleaks scanne tout l'historique
 
       # ===================================================================
-      # ÉTAPE GITLEAKS AVEC AVERTISSEMENT CONDITIONNEL
+      # ÉTAPE DE SÉCURITÉ GLOBALE
       # ===================================================================
       - name: "2. Scan for Secrets with Gitleaks"
-        id: gitleaks_scan # On donne un ID à l'étape pour la référencer
         uses: gitleaks/gitleaks-action@v2
-        with:
-          # On dit à l'action de ne jamais faire échouer le pipeline.
-          # Elle renverra un "outcome" de 'failure' si des fuites sont trouvées.
-          exit-code: 0
+        # Par défaut, cette action fait échouer le pipeline si des secrets sont trouvés
 
-      - name: "3. Warn if Gitleaks Found Secrets"
-        # Cette étape ne s'exécute QUE si le résultat de l'étape précédente était un échec.
-        if: steps.gitleaks_scan.outcome == 'failure'
-        run: |
-          echo "::warning title=Gitleaks Found Secrets!::Gitleaks detected one or more secrets. The pipeline is configured to continue, but this should be fixed."
-
-      # ===================================================================
-      # AUTRES ÉTAPES DE SÉCURITÉ (CONFIGURÉES POUR ÊTRE TOLÉRANTES)
-      # ===================================================================
-      - name: "4. Scan IaC with Checkov"
+      - name: "3. Scan IaC with Checkov"
         uses: bridgecrewio/checkov-action@master
         with:
-          directory: ./quiz-app
-          soft_fail: true
+          directory: ./quiz-app # Scanne tout le dépôt
+          # Par défaut, Checkov fait échouer le pipeline en cas de problème
 
-      - name: "5. Scan K8s Manifests with Kubescape"
-        uses: kubescape/github-action@main # Utilisation de @main comme demandé
+      - name: "4. Scan K8s Manifests with Kubescape"
+        uses: kubescape/github-action@main
         with:
-          format: 'pretty'
-          # On met un seuil de conformité à 0 pour qu'il ne bloque jamais.
-          complianceThreshold: 0
-          # On retire severityThreshold pour éviter l'erreur et ne pas bloquer.
+          format: 'sarif' # On génère un rapport SARIF
+          output: 'kubescape-results.sarif'
+          # On définit des seuils de qualité stricts
+          complianceThreshold: 0 # Exige un score de conformité d'au moins 80%
+          severityThreshold: none # Bloque si des failles de sévérité "High" ou plus sont trouvées
+
+      - name: "5. Upload Kubescape SARIF"
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'kubescape-results.sarif'
 
       # ===================================================================
       # ÉTAPE DE VALIDATION DU FRONTEND
@@ -64,32 +68,38 @@ jobs:
           npm run lint
           npm test
 
-      - name: "8. Run Semgrep (SAST)"
+      - name: "8. Run Semgrep (SAST) and Generate SARIF"
         uses: returntocorp/semgrep-action@v1
         with:
           source-root: quiz-app/
-          config: p/default
+          generate-sarif: true # Fait échouer le job si des failles sont trouvées ET génère le rapport
 
-      - name: "9. Run OWASP Dependency-Check (SCA)"
+      - name: "9. Upload Semgrep SARIF"
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+
+      - name: "10. Run OWASP Dependency-Check (SCA) and Generate SARIF"
         uses: dependency-check/Dependency-Check_Action@main
         with:
           project: 'quiz-app'
           path: 'quiz-app/'
-          format: 'HTML'
+          format: 'SARIF'
+          failOnCVSS: 7 # Fait échouer le pipeline si une vulnérabilité avec un score CVSS de 7 ou plus est trouvée
 
-      - name: "10. Upload OWASP-DC HTML Report as Artifact"
-        uses: actions/upload-artifact@v4
+      - name: "11. Upload OWASP-DC SARIF"
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          name: owasp-dependency-check-report
-          path: quiz-app/reports/dependency-check-report.html
+          sarif_file: 'quiz-app/reports/dependency-check-report.sarif'
 
-      - name: "11. Build Docker Image"
+      - name: "12. Build Docker Image"
         working-directory: ./quiz-app
         run: docker build -t frontend-test-build .
 
-      - name: "12. Run Trivy Scan"
+      - name: "13. Run Trivy Scan and Generate SARIF"
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'frontend-test-build'
-          format: 'table'
-          exit-code: '0'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL' # Fait échouer le pipeline pour ces sévérités
