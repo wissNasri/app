@@ -38,7 +38,7 @@ jobs:
       - name: "4. Scan IaC with Checkov"
         uses: bridgecrewio/checkov-action@master
         with:
-          directory: ./
+          directory: ./quiz-app
           soft_fail: true
 
       - name: "5. Scan K8s Manifests with Kubescape"
