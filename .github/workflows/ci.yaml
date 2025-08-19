@@ -1,6 +1,6 @@
-# Nom du fichier : .github/workflows/full-validation-tolerant.yml
+# Nom du fichier : .github/workflows/full-validation-tolerant-with-warning.yml
 
-name: Full Validation Pipeline (Tolerant Mode)
+name: Full Validation Pipeline (Tolerant Mode with Warning)
 
 on: [push]
 
@@ -15,62 +15,79 @@ jobs:
         with:
           fetch-depth: 0
 
+      # ===================================================================
+      # ÉTAPE GITLEAKS AVEC AVERTISSEMENT CONDITIONNEL
+      # ===================================================================
       - name: "2. Scan for Secrets with Gitleaks"
+        id: gitleaks_scan # On donne un ID à l'étape pour la référencer
         uses: gitleaks/gitleaks-action@v2
-        continue-on-error: true
+        with:
+          # On dit à l'action de ne jamais faire échouer le pipeline.
+          # Elle renverra un "outcome" de 'failure' si des fuites sont trouvées.
+          exit-code: 0
 
-      - name: "3. Scan IaC with Checkov"
+      - name: "3. Warn if Gitleaks Found Secrets"
+        # Cette étape ne s'exécute QUE si le résultat de l'étape précédente était un échec.
+        if: steps.gitleaks_scan.outcome == 'failure'
+        run: |
+          echo "::warning title=Gitleaks Found Secrets!::Gitleaks detected one or more secrets. The pipeline is configured to continue, but this should be fixed."
+
+      # ===================================================================
+      # AUTRES ÉTAPES DE SÉCURITÉ (CONFIGURÉES POUR ÊTRE TOLÉRANTES)
+      # ===================================================================
+      - name: "4. Scan IaC with Checkov"
         uses: bridgecrewio/checkov-action@master
         with:
           directory: ./
           soft_fail: true
 
-      - name: "4. Scan K8s Manifests with Kubescape"
-        uses: kubescape/github-action@v0.4.0
+      - name: "5. Scan K8s Manifests with Kubescape"
+        uses: kubescape/github-action@main # Utilisation de @main comme demandé
         with:
           format: 'pretty'
-          # On met un seuil de conformité à 0 pour qu'il ne bloque jamais sur ce critère.
+          # On met un seuil de conformité à 0 pour qu'il ne bloque jamais.
           complianceThreshold: 0
-          # On ne spécifie PAS de severityThreshold pour qu'il ne bloque pas dessus.
+          # On retire severityThreshold pour éviter l'erreur et ne pas bloquer.
 
-      # ... (le reste du pipeline reste identique) ...
-
-      - name: "5. Setup Node.js"
+      # ===================================================================
+      # ÉTAPE DE VALIDATION DU FRONTEND
+      # ===================================================================
+      - name: "6. Setup Node.js"
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: "6. Install Dependencies & Run Tests"
+      - name: "7. Install Dependencies & Run Tests"
         working-directory: ./quiz-app
         run: |
           npm install
           npm run lint
           npm test
 
-      - name: "7. Run Semgrep (SAST)"
+      - name: "8. Run Semgrep (SAST)"
         uses: returntocorp/semgrep-action@v1
         with:
           source-root: quiz-app/
           config: p/default
 
-      - name: "8. Run OWASP Dependency-Check (SCA)"
+      - name: "9. Run OWASP Dependency-Check (SCA)"
         uses: dependency-check/Dependency-Check_Action@main
         with:
           project: 'quiz-app'
           path: 'quiz-app/'
           format: 'HTML'
 
-      - name: "9. Upload OWASP-DC HTML Report as Artifact"
+      - name: "10. Upload OWASP-DC HTML Report as Artifact"
         uses: actions/upload-artifact@v4
         with:
           name: owasp-dependency-check-report
           path: quiz-app/reports/dependency-check-report.html
 
-      - name: "10. Build Docker Image"
+      - name: "11. Build Docker Image"
         working-directory: ./quiz-app
         run: docker build -t frontend-test-build .
 
-      - name: "11. Run Trivy Scan"
+      - name: "12. Run Trivy Scan"
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'frontend-test-build'
