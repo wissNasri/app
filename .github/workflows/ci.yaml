@@ -1,267 +1,67 @@
-name: React.js CI
+# Nom du fichier : .github/workflows/frontend-ci-without-sarif.yml
+
+name: Frontend CI without SARIF Reporting
 
 on:
   pull_request:
-    branches: "master"
+    paths: ['frontend/**']
 
 jobs:
-  frontend-test:
+  frontend-validation-without-sarif:
+    name: "Frontend Validation (Logs & Artifacts)"
     runs-on: ubuntu-latest
+    # Pas besoin de permissions spéciales ici
+
     defaults:
       run:
-        working-directory: ./quiz-app
-    strategy:
-      matrix:
-        node-version: [20.x]
-        architecture: [x64]
+        working-directory: ./frontend
+
     steps:
-      - name: Check-out git repository  
+      - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      - name: USE NODEJS ${{ matrix.node-version }} - ${{ matrix.architecture }}
+      - name: "Scan for Secrets with Gitleaks"
+        uses: gitleaks/gitleaks-action@v2
+
+      - name: "Setup Node.js"
         uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-      - name: Install project dependencies 
-        working-directory: ./quiz-app
+      - name: "Install Dependencies & Run Tests"
         run: |
-          npm i
+          npm install
           npm run lint
-          npm install --save-dev --save-exact prettier
-          npm run prettier
           npm test
-        env:
-          CI: true 
 
-      - name: Build
-        run: npm run build
-        working-directory: ./quiz-app
-
-              # Setup sonar-scanner
-      - name: Setup SonarQube
-        uses: warchant/setup-sonar-scanner@v8
-
-      - name: Analyze with SonarCloud
-        uses: sonarsource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      # --- Alternative 1 : Sortie standard ---
+      - name: "Run Semgrep (SAST) and Output to Logs"
+        uses: returntocorp/semgrep-action@v1
         with:
-          projectBaseDir: quiz-app
-          args: >
-            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
-            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
-            -Dsonar.host.url=${{ secrets.SONAR_URL }}
-            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
-            -Dsonar.sources=src/
-            -Dsonar.verbose=true
-        
-  backend-test:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./backend
-    strategy:
-      matrix:
-        node-version: [20.x]
-        architecture: [x64]
-    steps:
-      - name: Check-out git repository  
-        uses: actions/checkout@v4
+          source-root: frontend/
+          # Par défaut, Semgrep affiche les résultats dans les logs et fait échouer le job
 
-      - name: USE NODEJS ${{ matrix.node-version }} - ${{ matrix.architecture }}
-        uses: actions/setup-node@v4
-
-      - name: Install project dependencies 
-        working-directory: ./backend
-        run: |
-          npm i
-          npm run lint
-          npm install --save-dev --save-exact prettier
-          npm run prettier
-          npm test
-        env:
-          CI: true 
-
-              # Setup sonar-scanner
-      - name: Setup SonarQube
-        uses: warchant/setup-sonar-scanner@v8
-
-      - name: Analyze with SonarCloud
-        uses: sonarsource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      # --- Alternative 2 : Rapport HTML en tant qu'artefact ---
+      - name: "Run OWASP Dependency-Check (SCA) and Generate HTML Report"
+        uses: dependency-check/Dependency-Check_Action@main
         with:
-          projectBaseDir: backend
-          args: >
-            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
-            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
-            -Dsonar.host.url=${{ secrets.SONAR_URL }}
-            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
-            -Dsonar.sources=.
-            -Dsonar.verbose=true
-          
+          project: 'frontend'
+          path: './'
+          format: 'HTML' # On génère un rapport lisible par un humain
 
-  frontend-security:
-    needs: frontend-test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./quiz-app
-    steps:
-      - uses: actions/checkout@master
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/node@master
-        continue-on-error: true # To make sure that SARIF upload gets called
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          
-      - name: Install Snyk CLI
-        uses: snyk/actions/setup@master
+      - name: "Upload OWASP-DC HTML Report as Artifact"
+        uses: actions/upload-artifact@v4
         with:
-          version: latest
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}  
-         
-      - name: Snyk Authenticate    
-        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+          name: owasp-dependency-check-report
+          path: frontend/reports/dependency-check-report.html
 
-      - name: Snyk Code Test
-        run: snyk code test --all-projects
-        continue-on-error: true
+      # --- Alternative 3 : Tableau dans les logs ---
+      - name: "Build Docker Image"
+        run: docker build -t frontend-test-build .
 
-  backend-security:
-    needs: backend-test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./backend
-    steps:
-      - uses: actions/checkout@master
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/node@master
-        continue-on-error: true # To make sure that SARIF upload gets called
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-         
-      - name: Install Snyk CLI
-        uses: snyk/actions/setup@master
+      - name: "Run Trivy Scan and Output as Table"
+        uses: aquasecurity/trivy-action@master
         with:
-          version: latest
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          
-      - name: Snyk Authenticate    
-        run: snyk auth ${{ secrets.SNYK_TOKEN }}
-
-      - name: Snyk Code Test
-        run: snyk code test --all-projects
-        continue-on-error: true
-
-  frontend-image:
-    needs: frontend-security
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read 
-      security-events: write 
-      actions: read
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Build and push backend Docker image
-      working-directory: ./quiz-app
-      run: |
-        docker build . -t ${{ secrets.DOCKER_USERNAME }}/frontend-js
-        echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin 
-        docker push ${{ secrets.DOCKER_USERNAME }}/frontend-js    
-
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: 'docker.io/${{ secrets.DOCKER_USERNAME }}/frontend-js'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-        severity: 'CRITICAL,HIGH'
-
-    - name: Install Snyk CLI
-      uses: snyk/actions/setup@master
-      with:
-        snyk-token: ${{ secrets.SNYK_TOKEN }}
-       
-    - name: Snyk Authenticate    
-      run: snyk auth ${{ secrets.SNYK_TOKEN }}
-  
-    - name: Snyk Container monitor
-      run: snyk container monitor ${{ secrets.DOCKER_USERNAME }}/frontend-js --file=Dockerfile   
-      working-directory: ./quiz-app
-
-    - name: Run Snyk to check for vulnerabilities in the Docker image
-      uses: snyk/actions/docker@master
-      with:
-        image: ${{ secrets.DOCKER_USERNAME }}/frontend-js
-        args: --file=quiz-app/Dockerfile --severity-threshold=high
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      continue-on-error: true
-
-
-
-  backend-image:
-    needs: backend-security
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read 
-      security-events: write 
-      actions: read
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Build and push backend Docker image
-      working-directory: ./backend
-      run: |
-        docker build . -t ${{ secrets.DOCKER_USERNAME }}/backend-api
-        echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin 
-        docker push ${{ secrets.DOCKER_USERNAME }}/backend-api    
-
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: 'docker.io/${{ secrets.DOCKER_USERNAME }}/backend-api'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-        severity: 'CRITICAL,HIGH' 
-        
-    - name: Install Snyk CLI
-      uses: snyk/actions/setup@master
-      with:
-        snyk-token: ${{ secrets.SNYK_TOKEN }}
-     
-    - name: Snyk Authenticate    
-      run: snyk auth ${{ secrets.SNYK_TOKEN }}
-
-    - name: Snyk Container monitor
-      run: snyk container monitor ${{ secrets.DOCKER_USERNAME }}/backend-api --file=Dockerfile   
-      working-directory: ./backend
-
-    - name: Run Snyk to check for vulnerabilities in the Docker image
-      uses: snyk/actions/docker@master
-      with:
-        image: ${{ secrets.DOCKER_USERNAME }}/backend-api
-        args: --file=backend/Dockerfile --severity-threshold=high
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      continue-on-error: true 
-
-
-  k8s-manifest-scan:
-    needs: [backend-security, frontend-security]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run Snyk to check Kubernetes manifest file for issues
-        uses: snyk/actions/iac@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          file: kubernetes-manifest/
-          args: --severity-threshold=high
+          image-ref: 'frontend-test-build'
+          format: 'table' # Affiche un tableau clair directement dans les logs du pipeline
+          severity: 'CRITICAL,HIGH'
