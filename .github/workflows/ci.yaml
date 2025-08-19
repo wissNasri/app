@@ -20,7 +20,7 @@ jobs:
         uses: bridgecrewio/checkov-action@master
         with:
           # Scanne tout le dépôt à la recherche de fichiers de configuration
-          directory: ./
+          directory: ./kubernetes-manifest
           # Vous pouvez spécifier des dossiers si besoin:
           # directory: ./terraform, ./kubernetes-manifest
 
