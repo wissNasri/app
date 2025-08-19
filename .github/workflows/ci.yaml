@@ -2,102 +2,100 @@
 
 name: Professional CI Pipeline with SARIF Reporting
 
-# Se déclenche sur les Pull Requests vers la branche master
-on: [push]
-
-    paths:
-      - 'quiz-app/**' # Ne se déclenche que si le code du frontend change
-      - '.github/workflows/ci.yml' # Se déclenche aussi si on modifie le pipeline lui-même
+on: [push] 
+ 
 
 jobs:
   security-and-validation:
     name: "Security Validation and Build"
     runs-on: ubuntu-latest
 
-    # --- PERMISSIONS CRUCIALES POUR LA SOLUTION SARIF ---
     permissions:
-      contents: read          # Pour checkout le code
-      security-events: write # Pour téléverser les rapports SARIF vers l'onglet Security
+      contents: read
+      security-events: write
 
     steps:
       - name: "1. Checkout Code"
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Nécessaire pour que Gitleaks scanne tout l'historique
+          fetch-depth: 0
 
-      # ===================================================================
-      # ÉTAPE DE SÉCURITÉ GLOBALE
-      # ===================================================================
+      # --- Scans globaux ---
       - name: "2. Scan for Secrets with Gitleaks"
         uses: gitleaks/gitleaks-action@v2
-        # Par défaut, cette action fait échouer le pipeline si des secrets sont trouvés
 
       - name: "3. Scan IaC with Checkov"
-        uses: bridgecrewio/checkov-action@master
+        uses: bridgecrewio/checkov-action@v12 # Utiliser une version figée
         with:
-          directory: ./quiz-app # Scanne tout le dépôt
-          # Par défaut, Checkov fait échouer le pipeline en cas de problème
+          directory: ./quiz-app
 
       - name: "4. Scan K8s Manifests with Kubescape"
         uses: kubescape/github-action@main
         with:
-          format: 'sarif' # On génère un rapport SARIF
+          format: 'sarif'
           output: 'kubescape-results.sarif'
-          # On définit des seuils de qualité stricts
-          complianceThreshold: 0 # Exige un score de conformité d'au moins 80%
+          complianceThreshold: 0
 
       - name: "5. Upload Kubescape SARIF"
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'kubescape-results.sarif'
 
-      # ===================================================================
-      # ÉTAPE DE VALIDATION DU FRONTEND
-      # ===================================================================
-      - name: "6. Setup Node.js"
+      # --- Validation du Frontend ---
+      - name: "6. Setup Node.js with Cache"
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ./quiz-app/package-lock.json
 
-      - name: "7. Install Dependencies & Run Tests"
+      - name: "7. Install Dependencies & Run Lint/Tests"
         working-directory: ./quiz-app
         run: |
           npm install
           npm run lint
           npm test
 
+      # --- Scans de sécurité applicative ---
       - name: "8. Run Semgrep (SAST) and Generate SARIF"
         uses: returntocorp/semgrep-action@v1
         with:
           source-root: quiz-app/
-          generate-sarif: true # Fait échouer le job si des failles sont trouvées ET génère le rapport
+          generate-sarif: true
 
       - name: "9. Upload Semgrep SARIF"
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: semgrep.sarif
 
-      - name: "10. Run OWASP Dependency-Check (SCA) and Generate SARIF"
+      - name: "10. Run OWASP Dependency-Check (SCA)"
         uses: dependency-check/Dependency-Check_Action@main
         with:
           project: 'quiz-app'
           path: 'quiz-app/'
           format: 'SARIF'
-          failOnCVSS: 7 # Fait échouer le pipeline si une vulnérabilité avec un score CVSS de 7 ou plus est trouvée
+          failOnCVSS: 7
 
       - name: "11. Upload OWASP-DC SARIF"
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'quiz-app/reports/dependency-check-report.sarif'
 
+      # --- Build et Scan de l'image Docker ---
       - name: "12. Build Docker Image"
         working-directory: ./quiz-app
         run: docker build -t frontend-test-build .
 
       - name: "13. Run Trivy Scan and Generate SARIF"
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.20.0 # Utiliser une version figée
         with:
           image-ref: 'frontend-test-build'
           format: 'sarif'
           output: 'trivy-results.sarif'
-          severity: 'CRITICAL' # Fait échouer le pipeline pour ces sévérités
+          severity: 'CRITICAL'
+          exit-code: '1'
+
+      - name: "14. Upload Trivy SARIF"
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
