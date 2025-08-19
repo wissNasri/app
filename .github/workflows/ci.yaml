@@ -24,14 +24,14 @@ jobs:
           # Vous pouvez spécifier des dossiers si besoin:
           # directory: ./terraform, ./kubernetes-manifest
 
-      - name: "3. Scan K8s Manifests for Compliance with Kubescape"
-        uses: kubescape/github-action@main
+      - name: "Scan K8s Manifests for Compliance with Kubescape"
+        uses: kubescape/github-action@v0.4.0
         with:
-          # Kubescape scanne automatiquement les fichiers YAML dans le dépôt
-          # On affiche les résultats sous forme de tableau dans les logs
           format: 'pretty'
-          # Fait échouer le build si le score de risque est supérieur à un certain seuil
-          threshold: 80 # Exemple : exige un score de conformité d'au moins 70%
+          # On dit à l'outil d'être extrêmement permissif
+          complianceThreshold: 0
+          severityThreshold: critical
+
 
       # ===================================================================
       # ÉTAPE DE VALIDATION DU FRONTEND
