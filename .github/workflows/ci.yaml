@@ -46,7 +46,6 @@ jobs:
           output: 'kubescape-results.sarif'
           # On définit des seuils de qualité stricts
           complianceThreshold: 0 # Exige un score de conformité d'au moins 80%
-          severityThreshold: none # Bloque si des failles de sévérité "High" ou plus sont trouvées
 
       - name: "5. Upload Kubescape SARIF"
         uses: github/codeql-action/upload-sarif@v3
