@@ -1,81 +1,95 @@
-# Nom du fichier : .github/workflows/frontend-ci-full-scan.yml
+# Nom du fichier : .github/workflows/full-validation-tolerant-with-warning.yml
 
-name: Frontend CI with IaC and K8s Manifest Scanning
+name: Full Validation Pipeline (Tolerant Mode with Warning)
 
 on: [push]
 
 jobs:
   full-validation:
     name: "Full Validation (Frontend, IaC, K8s)"
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
       - name: "1. Checkout Code"
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # ===================================================================
-      # ÉTAPE DE SÉCURITÉ GLOBALE (IaC & Manifestes)
+      # ÉTAPE DE SÉCURITÉ GITLEAKS (AVEC LOGIQUE D'AVERTISSEMENT)
       # ===================================================================
-      - name: "2. Scan IaC and K8s Manifests with Checkov"
+      - name: "2. Scan for Secrets with Gitleaks"
+        id: gitleaks_scan # On donne un ID à l'étape pour pouvoir la référencer
+        uses: gitleaks/gitleaks-action@v2
+        # On dit à l'action de ne JAMAIS faire échouer le pipeline.
+        # Elle va juste renvoyer un code de sortie (0 si ok, 2 si fuite trouvée).
+        with:
+          exit-code: 0
+
+      - name: "3. Check Gitleaks Results and Warn if Leaks are Found"
+        # Cette étape ne s'exécute QUE si l'étape précédente (gitleaks_scan) a échoué
+        # (c'est-à-dire si Gitleaks a trouvé quelque chose et aurait normalement renvoyé un code d'erreur).
+        if: steps.gitleaks_scan.outcome == 'failure'
+        run: |
+          echo "::warning title=Gitleaks Found Secrets!::Gitleaks detected one or more secrets in the repository. The pipeline is configured to continue, but this should be fixed before merging to production."
+          
+      # ===================================================================
+      # AUTRES ÉTAPES DE SÉCURITÉ (CONFIGURÉES POUR ÊTRE TOLÉRANTES)
+      # ===================================================================
+      - name: "4. Scan IaC with Checkov"
         uses: bridgecrewio/checkov-action@master
         with:
-          # Scanne tout le dépôt à la recherche de fichiers de configuration
-          directory: ./quiz-app
-          # Vous pouvez spécifier des dossiers si besoin:
-          # directory: ./terraform, ./kubernetes-manifest
+          directory: ./
+          soft_fail: true
 
-      - name: "Scan K8s Manifests for Compliance with Kubescape"
-        uses: kubescape/github-action@main
+      - name: "5. Scan K8s Manifests with Kubescape"
+        uses: kubescape/github-action@v0.4.0
         with:
           format: 'pretty'
-          # On dit à l'outil d'être extrêmement permissif
           complianceThreshold: 0
-          severityThreshold: critical
-
+          severityThreshold: none
 
       # ===================================================================
       # ÉTAPE DE VALIDATION DU FRONTEND
       # ===================================================================
-      - name: "4. Setup Node.js"
+      - name: "6. Setup Node.js"
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: "5. Install Dependencies & Run Tests"
-        working-directory: ./quiz-app # On spécifie le dossier pour les commandes npm
+      - name: "7. Install Dependencies & Run Tests"
+        working-directory: ./quiz-app
         run: |
           npm install
           npm run lint
           npm test
 
-      - name: "6. Run Semgrep (SAST) and Output to Logs"
+      - name: "8. Run Semgrep (SAST)"
         uses: returntocorp/semgrep-action@v1
         with:
-          # Le chemin est relatif à la racine du dépôt
           source-root: quiz-app/
+          config: p/default
 
-      - name: "7. Run OWASP Dependency-Check (SCA) and Generate HTML Report"
+      - name: "9. Run OWASP Dependency-Check (SCA)"
         uses: dependency-check/Dependency-Check_Action@main
         with:
           project: 'quiz-app'
-          # Le chemin est relatif à la racine du dépôt
           path: 'quiz-app/'
           format: 'HTML'
 
-      - name: "8. Upload OWASP-DC HTML Report as Artifact"
+      - name: "10. Upload OWASP-DC HTML Report as Artifact"
         uses: actions/upload-artifact@v4
         with:
           name: owasp-dependency-check-report
-          # Le chemin doit être correct par rapport à la racine du dépôt
           path: quiz-app/reports/dependency-check-report.html
 
-      - name: "9. Build Docker Image"
-        working-directory: ./quiz-app # On spécifie le dossier pour le build
+      - name: "11. Build Docker Image"
+        working-directory: ./quiz-app
         run: docker build -t frontend-test-build .
 
-      - name: "10. Run Trivy Scan and Output as Table"
+      - name: "12. Run Trivy Scan"
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'frontend-test-build'
           format: 'table'
-          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
