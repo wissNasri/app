@@ -18,6 +18,7 @@ spec:
       containers:
       - name: mongo
         image: mongo:4.4.6
+        imagePullPolicy: Always
         ports:
         - containerPort: 27017
         volumeMounts:
@@ -35,6 +36,8 @@ spec:
           periodSeconds: 15
         securityContext:
           allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 999 # utilisateur non-root pour Mongo
         resources:
           requests:
             cpu: "250m"
