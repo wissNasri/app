@@ -3,12 +3,11 @@
 name: Professional CI Pipeline with SARIF Reporting
 
 # Se déclenche sur les Pull Requests vers la branche master
-on:
-  pull_request:
-    branches: [ master ]
+on: [push]
+
     paths:
       - 'quiz-app/**' # Ne se déclenche que si le code du frontend change
-      - '.github/workflows/professional-ci-pipeline.yml' # Se déclenche aussi si on modifie le pipeline lui-même
+      - '.github/workflows/ci.yml' # Se déclenche aussi si on modifie le pipeline lui-même
 
 jobs:
   security-and-validation:
