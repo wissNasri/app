@@ -2,9 +2,8 @@
 
 name: Frontend CI without SARIF Reporting
 
-on:
-  pull_request:
-    paths: ['quiz-app/**']
+on: [push]
+
 
 jobs:
   frontend-validation-without-sarif:
