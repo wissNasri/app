@@ -25,7 +25,7 @@ jobs:
           # directory: ./terraform, ./kubernetes-manifest
 
       - name: "3. Scan K8s Manifests for Compliance with Kubescape"
-        uses: kubescape/github-action@v0.4.0
+        uses: kubescape/github-action@v0.2.1
         with:
           # Kubescape scanne automatiquement les fichiers YAML dans le dépôt
           # On affiche les résultats sous forme de tableau dans les logs
