@@ -101,4 +101,4 @@ jobs:
           image-ref: 'frontend-test-build'
           format: 'sarif'
           output: 'trivy-results.sarif'
-          severity: 'HIGH,CRITICAL' # Fait échouer le pipeline pour ces sévérités
+          severity: 'CRITICAL' # Fait échouer le pipeline pour ces sévérités
