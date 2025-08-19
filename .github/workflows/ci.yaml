@@ -1,64 +1,81 @@
-# Nom du fichier : .github/workflows/frontend-ci-without-sarif.yml
+# Nom du fichier : .github/workflows/frontend-ci-full-scan.yml
 
-name: Frontend CI without SARIF Reporting
+name: Frontend CI with IaC and K8s Manifest Scanning
 
 on: [push]
 
-
 jobs:
-  frontend-validation-without-sarif:
-    name: "Frontend Validation (Logs & Artifacts)"
+  full-validation:
+    name: "Full Validation (Frontend, IaC, K8s)"
     runs-on: ubuntu-latest
-    # Pas besoin de permissions spéciales ici
-
-    defaults:
-      run:
-        working-directory: ./quiz-app
 
     steps:
-      - name: "Checkout Code"
+      - name: "1. Checkout Code"
         uses: actions/checkout@v4
 
-    
-      - name: "Setup Node.js"
+      # ===================================================================
+      # ÉTAPE DE SÉCURITÉ GLOBALE (IaC & Manifestes)
+      # ===================================================================
+      - name: "2. Scan IaC and K8s Manifests with Checkov"
+        uses: bridgecrewio/checkov-action@master
+        with:
+          # Scanne tout le dépôt à la recherche de fichiers de configuration
+          directory: ./
+          # Vous pouvez spécifier des dossiers si besoin:
+          # directory: ./terraform, ./kubernetes-manifest
+
+      - name: "3. Scan K8s Manifests for Compliance with Kubescape"
+        uses: kubescape/github-action@v0.4.0
+        with:
+          # Kubescape scanne automatiquement les fichiers YAML dans le dépôt
+          # On affiche les résultats sous forme de tableau dans les logs
+          format: 'pretty'
+          # Fait échouer le build si le score de risque est supérieur à un certain seuil
+          threshold: 70 # Exemple : exige un score de conformité d'au moins 70%
+
+      # ===================================================================
+      # ÉTAPE DE VALIDATION DU FRONTEND
+      # ===================================================================
+      - name: "4. Setup Node.js"
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: "Install Dependencies & Run Tests"
+      - name: "5. Install Dependencies & Run Tests"
+        working-directory: ./quiz-app # On spécifie le dossier pour les commandes npm
         run: |
           npm install
           npm run lint
           npm test
 
-      # --- Alternative 1 : Sortie standard ---
-      - name: "Run Semgrep (SAST) and Output to Logs"
+      - name: "6. Run Semgrep (SAST) and Output to Logs"
         uses: returntocorp/semgrep-action@v1
         with:
-          source-root: frontend/
-          # Par défaut, Semgrep affiche les résultats dans les logs et fait échouer le job
+          # Le chemin est relatif à la racine du dépôt
+          source-root: quiz-app/
 
-      # --- Alternative 2 : Rapport HTML en tant qu'artefact ---
-      - name: "Run OWASP Dependency-Check (SCA) and Generate HTML Report"
+      - name: "7. Run OWASP Dependency-Check (SCA) and Generate HTML Report"
         uses: dependency-check/Dependency-Check_Action@main
         with:
-          project: 'frontend'
-          path: './'
-          format: 'HTML' # On génère un rapport lisible par un humain
+          project: 'quiz-app'
+          # Le chemin est relatif à la racine du dépôt
+          path: 'quiz-app/'
+          format: 'HTML'
 
-      - name: "Upload OWASP-DC HTML Report as Artifact"
+      - name: "8. Upload OWASP-DC HTML Report as Artifact"
         uses: actions/upload-artifact@v4
         with:
           name: owasp-dependency-check-report
-          path: frontend/reports/dependency-check-report.html
+          # Le chemin doit être correct par rapport à la racine du dépôt
+          path: quiz-app/reports/dependency-check-report.html
 
-      # --- Alternative 3 : Tableau dans les logs ---
-      - name: "Build Docker Image"
+      - name: "9. Build Docker Image"
+        working-directory: ./quiz-app # On spécifie le dossier pour le build
         run: docker build -t frontend-test-build .
 
-      - name: "Run Trivy Scan and Output as Table"
+      - name: "10. Run Trivy Scan and Output as Table"
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'frontend-test-build'
-          format: 'table' # Affiche un tableau clair directement dans les logs du pipeline
+          format: 'table'
           severity: 'CRITICAL,HIGH'
