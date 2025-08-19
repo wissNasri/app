@@ -1,6 +1,6 @@
-# Nom du fichier : .github/workflows/full-validation-tolerant-with-warning.yml
+# Nom du fichier : .github/workflows/full-validation-tolerant.yml
 
-name: Full Validation Pipeline (Tolerant Mode with Warning)
+name: Full Validation Pipeline (Tolerant Mode)
 
 on: [push]
 
@@ -15,79 +15,62 @@ jobs:
         with:
           fetch-depth: 0
 
-      # ===================================================================
-      # ÉTAPE DE SÉCURITÉ GITLEAKS (AVEC LOGIQUE D'AVERTISSEMENT)
-      # ===================================================================
       - name: "2. Scan for Secrets with Gitleaks"
-        id: gitleaks_scan # On donne un ID à l'étape pour pouvoir la référencer
         uses: gitleaks/gitleaks-action@v2
-        # On dit à l'action de ne JAMAIS faire échouer le pipeline.
-        # Elle va juste renvoyer un code de sortie (0 si ok, 2 si fuite trouvée).
-        with:
-          exit-code: 0
+        continue-on-error: true
 
-      - name: "3. Check Gitleaks Results and Warn if Leaks are Found"
-        # Cette étape ne s'exécute QUE si l'étape précédente (gitleaks_scan) a échoué
-        # (c'est-à-dire si Gitleaks a trouvé quelque chose et aurait normalement renvoyé un code d'erreur).
-        if: steps.gitleaks_scan.outcome == 'failure'
-        run: |
-          echo "::warning title=Gitleaks Found Secrets!::Gitleaks detected one or more secrets in the repository. The pipeline is configured to continue, but this should be fixed before merging to production."
-          
-      # ===================================================================
-      # AUTRES ÉTAPES DE SÉCURITÉ (CONFIGURÉES POUR ÊTRE TOLÉRANTES)
-      # ===================================================================
-      - name: "4. Scan IaC with Checkov"
+      - name: "3. Scan IaC with Checkov"
         uses: bridgecrewio/checkov-action@master
         with:
           directory: ./
           soft_fail: true
 
-      - name: "5. Scan K8s Manifests with Kubescape"
-        uses: kubescape/github-action@main
+      - name: "4. Scan K8s Manifests with Kubescape"
+        uses: kubescape/github-action@v0.4.0
         with:
           format: 'pretty'
+          # On met un seuil de conformité à 0 pour qu'il ne bloque jamais sur ce critère.
           complianceThreshold: 0
-          severityThreshold: none
+          # On ne spécifie PAS de severityThreshold pour qu'il ne bloque pas dessus.
 
-      # ===================================================================
-      # ÉTAPE DE VALIDATION DU FRONTEND
-      # ===================================================================
-      - name: "6. Setup Node.js"
+      # ... (le reste du pipeline reste identique) ...
+
+      - name: "5. Setup Node.js"
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: "7. Install Dependencies & Run Tests"
+      - name: "6. Install Dependencies & Run Tests"
         working-directory: ./quiz-app
         run: |
           npm install
           npm run lint
           npm test
 
-      - name: "8. Run Semgrep (SAST)"
+      - name: "7. Run Semgrep (SAST)"
         uses: returntocorp/semgrep-action@v1
         with:
           source-root: quiz-app/
           config: p/default
 
-      - name: "9. Run OWASP Dependency-Check (SCA)"
+      - name: "8. Run OWASP Dependency-Check (SCA)"
         uses: dependency-check/Dependency-Check_Action@main
         with:
           project: 'quiz-app'
           path: 'quiz-app/'
           format: 'HTML'
 
-      - name: "10. Upload OWASP-DC HTML Report as Artifact"
+      - name: "9. Upload OWASP-DC HTML Report as Artifact"
         uses: actions/upload-artifact@v4
         with:
           name: owasp-dependency-check-report
           path: quiz-app/reports/dependency-check-report.html
 
-      - name: "11. Build Docker Image"
+      - name: "10. Build Docker Image"
         working-directory: ./quiz-app
         run: docker build -t frontend-test-build .
 
-      - name: "12. Run Trivy Scan"
+      - name: "11. Run Trivy Scan"
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'frontend-test-build'
