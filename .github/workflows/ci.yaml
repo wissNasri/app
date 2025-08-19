@@ -7,7 +7,7 @@ on: [push]
 jobs:
   full-validation:
     name: "Full Validation (Frontend, IaC, K8s)"
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: "1. Checkout Code"
