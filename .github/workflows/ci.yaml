@@ -91,6 +91,9 @@ jobs:
           pip install semgrep
           semgrep scan --config "p/default" --sarif --output "semgrep.sarif" || true
 
+      - name: Create report directories
+        run: mkdir -p backend/reports quiz-app/reports
+
       - name: OWASP Dependency-Check Scan - Backend
         uses: dependency-check/Dependency-Check_Action@1.1.0
         with:
@@ -99,8 +102,7 @@ jobs:
           format: 'HTML'
           outputDirectory: './backend/reports'
           failOnCvss: 11 # Ne jamais échouer
-      - name: Create report directories
-        run: mkdir -p backend/reports quiz-app/reports
+      
       - name: OWASP Dependency-Check Scan - Frontend
         uses:  dependency-check/Dependency-Check_Action@1.1.0
         with:
