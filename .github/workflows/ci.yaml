@@ -1,22 +1,50 @@
-# Nom du workflow
-name: 1 - Gitleaks Secret Scan (Strict)
+# Nom du workflow, reflétant l'ajout de l'analyse SAST.
+name: 3 - SAST Analysis
 
 on: [push]
 
 jobs:
-  gitleaks-scan:
-    name: Scan for Secrets
+  frontend-sast-check:
+    name: Frontend Security Analysis
     runs-on: ubuntu-latest
-    
+    permissions:
+      # Permission pour cloner le code.
+      contents: read
+      # Permission nécessaire pour que Semgrep puisse uploader ses résultats.
+      security-events: write
+
     steps:
       # Étape 1 : Récupérer le code avec l'historique complet.
       - name: 1. Checkout Code
         uses: actions/checkout@v4
-        # --- C'EST LA LIGNE LA PLUS IMPORTANTE ---
-        # Elle force le téléchargement de TOUT l'historique.
         with:
           fetch-depth: 0
 
-      # Étape 2 : Exécuter Gitleaks.
+      # Étape 2 : Scanner les secrets.
       - name: 2. Run Gitleaks Scan
         uses: gitleaks/gitleaks-action@v2
+
+      # Étape 3 : Installer les dépendances et exécuter les tests.
+      - name: 3. Install Dependencies & Run Tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+        run: |
+          npm install
+          npm run lint
+          npm test
+        working-directory: ./quiz-app
+        env:
+          CI: true
+
+      # --- NOUVELLE ÉTAPE AJOUTÉE ---
+      # Étape 4 : Analyser le code source avec Semgrep (SAST).
+      - name: 4. Run Semgrep SAST Scan
+        # Utilise l'action officielle de Semgrep.
+        uses: returntocorp/semgrep-action@v1
+        with:
+          # On dit à Semgrep de se concentrer sur le dossier du frontend.
+          # C'est plus efficace que de scanner tout le dépôt.
+          # 'p/default' est un ensemble de règles de haute qualité maintenu par Semgrep.
+          config: 'p/default'
+        working-directory: ./quiz-app
