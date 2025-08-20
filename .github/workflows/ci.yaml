@@ -32,30 +32,31 @@ jobs:
       # --------------------------------------------------
       - name: Installer les dépendances du frontend
         run: npm install
-        working-directory: $GITHUB_WORKSPACE/quiz-app
+        working-directory: quiz-app
 
       # --------------------------------------------------
       - name: Créer le dossier de rapports
-        run: mkdir -p $GITHUB_WORKSPACE/quiz-app/reports
+        run: mkdir -p quiz-app/reports
 
       # --------------------------------------------------
-      - name: Run Gitleaks Manually
+      - name: Run Gitleaks
         run: |
           wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
           tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
           chmod +x gitleaks
           ./gitleaks detect \
             --verbose \
-            --source="$GITHUB_WORKSPACE/quiz-app" \
+            --source="quiz-app" \
             --exit-code 0 \
             --report-format sarif \
-            --report-path "$GITHUB_WORKSPACE/quiz-app/reports/gitleaks-report.sarif"
+            --report-path "quiz-app/reports/gitleaks-report.sarif"
 
-      - name: Run Semgrep Manually
+      # --------------------------------------------------
+      - name: Run Semgrep
         run: |
           pip install semgrep
           semgrep scan --config "p/default" \
-            --sarif --output "$GITHUB_WORKSPACE/quiz-app/reports/semgrep.sarif" || true
+            --sarif --output "quiz-app/reports/semgrep.sarif" || true
 
       # --------------------------------------------------
       - name: Lancer l'analyse des dépendances du frontend (OWASP)
@@ -63,9 +64,9 @@ jobs:
         id: Depcheck
         with:
           project: "frontend-quiz-app"
-          path: "$GITHUB_WORKSPACE/quiz-app"
+          path: "quiz-app"
           format: "HTML"
-          out: "$GITHUB_WORKSPACE/quiz-app/reports"
+          out: "quiz-app/reports"
           args: >
             --enableRetired
         env:
@@ -76,19 +77,19 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gitleaks-frontend-report
-          path: $GITHUB_WORKSPACE/quiz-app/reports/gitleaks-report.sarif
+          path: quiz-app/reports/gitleaks-report.sarif
           if-no-files-found: warn
 
       - name: Upload Semgrep report
         uses: actions/upload-artifact@v4
         with:
           name: semgrep-frontend-report
-          path: $GITHUB_WORKSPACE/quiz-app/reports/semgrep.sarif
+          path: quiz-app/reports/semgrep.sarif
           if-no-files-found: warn
 
       - name: Upload OWASP report
         uses: actions/upload-artifact@v4
         with:
           name: owasp-frontend-report
-          path: $GITHUB_WORKSPACE/quiz-app/reports/dependency-check-report.html
+          path: quiz-app/reports/dependency-check-report.html
           if-no-files-found: warn
