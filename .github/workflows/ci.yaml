@@ -88,11 +88,14 @@ jobs:
           chmod +x gitleaks
           ./gitleaks detect --verbose --source="." --exit-code 0 --report-format sarif --report-path "gitleaks-report.sarif"
 
-      - name: Run Semgrep (SARIF)
-        run:
-            pip install semgrep
-            semgrep --config=p/default --sarif --output=semgrep.sarif
-
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          entryPoint: semgrep ci
+          args: >-
+            --config "p/default"
+            --sarif
+            --output "semgrep.sarif"
 
       - name: Create report directories
         run: mkdir -p backend/reports quiz-app/reports
