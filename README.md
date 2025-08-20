@@ -1,3 +1,8 @@
+---
+## Test de Sécurité Gitleaks
+Ceci est un test pour vérifier la détection de secrets.
+AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE"
+
 # Kubernetes DevSecOps CICD Project Using Github Actions and ArgoCD
 
 ## Video Tutorial
