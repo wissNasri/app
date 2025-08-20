@@ -35,7 +35,17 @@ jobs:
         working-directory: ./quiz-app
 
       # --------------------------------------------------
+      - name: Run Gitleaks Manually
+        run: |
+          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
+          tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
+          chmod +x gitleaks
+          ./gitleaks detect --verbose --source="." --exit-code 0 --report-format sarif --report-path "quiz-app/reports/gitleaks-report.sarif"
 
+      - name: Run Semgrep Manually
+        run: |
+          pip install semgrep
+          semgrep scan --config "p/default" --sarif --output "quiz-app/reports/semgrep.sarif" || true
 
       # --------------------------------------------------
       - name: Lancer l'analyse des dépendances du frontend
@@ -52,12 +62,9 @@ jobs:
           JAVA_HOME: /opt/jdk
 
       # --------------------------------------------------
-
-
-      # --------------------------------------------------
       - name: Upload Test results
         uses: actions/upload-artifact@v4
         with:
           name: Depcheck report - Frontend
-          path: ./quiz-app/reports/dependency-check-report.html
+          path: ./quiz-app/reports/
           if-no-files-found: warn
