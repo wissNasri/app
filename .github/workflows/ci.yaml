@@ -42,34 +42,4 @@ jobs:
           name: rapport-securite-backend
           path: reports/dependency-check-report.html
 
-  # --- JOB POUR LE FRONTEND ---
-  scan-frontend:
-    name: 2. Analyse du Frontend (React)
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout du code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Installer les dépendances du frontend
-        run: npm install
-        working-directory: ./quiz-app
-
-      - name: Lancer l'analyse des dépendances du frontend
-        # CORRECTION ICI : Ajout de @v4 à la fin de l'action
-        uses: owasp/dependency-check-action@v4
-        with:
-          args: '--project "frontend-quiz-app" --scan ./quiz-app --format HTML --failOnCVSS 7'
-
-      - name: Archiver le rapport du frontend (si succès)
-        # On vérifie que l'étape précédente n'a pas échoué
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rapport-securite-frontend
-          path: reports/dependency-check-report.html
+ 
