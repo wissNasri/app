@@ -31,7 +31,6 @@ jobs:
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-
-
       - name: Install dependencies, lint, and test
         working-directory: ./quiz-app
         run: |
@@ -60,7 +59,6 @@ jobs:
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-
-
       - name: Install dependencies, lint, and test
         working-directory: ./backend
         run: |
@@ -91,8 +89,7 @@ jobs:
       - name: Run Semgrep Manually
         run: |
           pip install semgrep
-          semgrep ci --config "p/default" --sarif --output "semgrep.sarif" || true
-
+          semgrep scan --config "p/default" --sarif --output "semgrep.sarif" || true
 
       - name: Create report directories
         run: mkdir -p backend/reports quiz-app/reports
@@ -105,16 +102,15 @@ jobs:
           restore-keys: |
             owasp-data-
 
-      - name: Run OWASP DC on Backend
+      - name: Run OWASP DC on Backend and Frontend (Sequentially )
         run: |
+          echo "--- Starting Backend Scan ---"
           docker run --rm \
-            -v $(pwd )/backend:/src \
+            -v $(pwd)/backend:/src \
             -v /tmp/owasp-data:/usr/share/dependency-check/data \
             owasp/dependency-check --project "Backend" --scan /src --format "HTML" --out /src/reports
-        continue-on-error: true
 
-      - name: Run OWASP DC on Frontend
-        run: |
+          echo "--- Starting Frontend Scan ---"
           docker run --rm \
             -v $(pwd)/quiz-app:/src \
             -v /tmp/owasp-data:/usr/share/dependency-check/data \
