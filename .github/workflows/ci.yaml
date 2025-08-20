@@ -1,37 +1,22 @@
-name: Comprehensive Pre-Deployment CI
-
-on:
-  push:
-    branches: ["main"]
-
-# Permissions globales pour le workflow
 permissions:
   contents: read
-  security-events: write # Pour que Trivy, Semgrep, etc., puissent publier des alertes
+  security-events: write
 
 jobs:
-  # ===================================================================
-  # ==                  ÉTAPE 1: TESTS FONCTIONNELS                  ==
-  # ===================================================================
   frontend-test:
     name: 1. Frontend - Test & Build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20.x'
-
       - name: Install dependencies, lint, and test
         working-directory: ./quiz-app
         run: |
           npm ci
           npm run lint
           npm test
-      
       - name: Build application
         working-directory: ./quiz-app
         run: npm run build
@@ -40,14 +25,10 @@ jobs:
     name: 1. Backend - Test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20.x'
-
       - name: Install dependencies, lint, and test
         working-directory: ./backend
         run: |
@@ -55,82 +36,59 @@ jobs:
           npm run lint
           npm test
 
-  # ===================================================================
-  # ==               ÉTAPE 2: SCANS DE SÉCURITÉ DU CODE              ==
-  # ===================================================================
   security-scan:
     name: 2. Security - Code & Dependency Scans
     runs-on: ubuntu-latest
-    needs: [frontend-test, backend-test] # S'exécute après les tests
+    needs: [frontend-test, backend-test]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Scan for leaked secrets (Gitleaks)
-        uses: gitleaks/gitleaks-action@v2
+      - uses: actions/checkout@v4
+      - uses: gitleaks/gitleaks-action@v2
         with:
           report_format: sarif
           report_path: gitleaks-report.sarif
-          continue-on-error: true # Ne pas bloquer le pipeline
-
-      - name: Static Application Security Testing (Semgrep)
-        uses: returntocorp/semgrep-action@v1
+          continue-on-error: true
+      - uses: returntocorp/semgrep-action@v1
         with:
-          publishResults: false # On va publier le SARIF manuellement
-
+          publishResults: false
       - name: Dependency Vulnerability Scan - Backend (OWASP)
         run: |
           docker run --rm -v $(pwd)/backend:/src owasp/dependency-check --project "Backend" --scan /src --format "ALL" --out /src/reports
         continue-on-error: true
-
       - name: Dependency Vulnerability Scan - Frontend (OWASP)
         run: |
           docker run --rm -v $(pwd)/quiz-app:/src owasp/dependency-check --project "Frontend" --scan /src --format "ALL" --out /src/reports
         continue-on-error: true
-
-      - name: Upload all SARIF files to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
+      - uses: github/codeql-action/upload-sarif@v3 # v3 est la version actuelle pour cette action
         with:
           sarif_file: |
             gitleaks-report.sarif
             semgrep.sarif
-      
       - name: Archive OWASP reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4 # <-- CORRECTION APPLIQUÉE ICI
         with:
           name: owasp-dependency-reports
           path: |
             backend/reports/
             quiz-app/reports/
 
-  # ===================================================================
-  # ==         ÉTAPE 3: BUILD & SCAN DES IMAGES DOCKER LOCALES       ==
-  # ===================================================================
   frontend-image:
     name: 3. Frontend - Build & Scan Image
     runs-on: ubuntu-latest
     needs: security-scan
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Build local Docker image
-        id: build-image
+      - uses: actions/checkout@v4
+      - id: build-image
         run: |
           docker build -t frontend-image:local -f quiz-app/Dockerfile .
           echo "image_name=frontend-image:local" >> $GITHUB_OUTPUT
-
-      - name: Scan local image with Trivy
-        uses: aquasecurity/trivy-action@master
+      - uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.build-image.outputs.image_name }}
           format: 'sarif'
           output: 'trivy-frontend-results.sarif'
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
-
-      - name: Upload Trivy SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
+      - uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-frontend-results.sarif'
 
@@ -139,25 +97,36 @@ jobs:
     runs-on: ubuntu-latest
     needs: security-scan
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Build local Docker image
-        id: build-image
+      - uses: actions/checkout@v4
+      - id: build-image
         run: |
           docker build -t backend-image:local -f backend/Dockerfile .
           echo "image_name=backend-image:local" >> $GITHUB_OUTPUT
-
-      - name: Scan local image with Trivy
-        uses: aquasecurity/trivy-action@master
+      - uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.build-image.outputs.image_name }}
           format: 'sarif'
           output: 'trivy-backend-results.sarif'
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
-
-      - name: Upload Trivy SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
+      - uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-backend-results.sarif'
+
+  iac-scan:
+    name: 4. IaC - Scan Kubernetes & Terraform
+    runs-on: ubuntu-latest
+    needs: security-scan
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          framework: all
+          output_format: sarif
+          output_file_path: checkov-results.sarif
+          quiet: true
+          soft_fail: true
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'checkov-results.sarif'
