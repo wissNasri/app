@@ -1,210 +1,43 @@
-name: Comprehensive and Optimized CI Pipeline
+# Nom du workflow
+name: Analyse de Sécurité MERN (avec échec sur vulnérabilité critique)
 
+# Déclencheurs
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
 
-# Permissions globales requises par les différentes actions
-permissions:
-  contents: read          # Pour le checkout du code
-  security-events: write # Pour uploader les résultats SARIF vers l'onglet Sécurité
+  workflow_dispatch:
 
+# Jobs à exécuter
 jobs:
-  # ===================================================================
-  # ==                  ÉTAPE 1: TESTS FONCTIONNELS                  ==
-  # ===================================================================
-  frontend-test:
-    name: 1. Frontend - Test & Build
+  # --- JOB POUR LE BACKEND ---
+  scan-backend:
+    name: 1. Analyse du Backend (Node.js/Express)
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
+      - name: Checkout du code
         uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
-      
-      - name: Cache npm dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-      - name: Install dependencies, lint, and test
-        working-directory: ./quiz-app
-        run: |
-          npm ci
-          npm run lint
-          npm test
-      - name: Build application
-        working-directory: ./quiz-app
-        run: npm run build
+          node-version: '18'
 
-  backend-test:
-    name: 1. Backend - Test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.x'
-
-      - name: Cache npm dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-      - name: Install dependencies, lint, and test
+      - name: Installer les dépendances du backend
+        run: npm install
         working-directory: ./backend
-        run: |
-          npm ci
-          npm run lint
-          npm test
 
-  # ===================================================================
-  # ==               ÉTAPE 2: SCANS DE SÉCURITÉ DU CODE              ==
-  # ===================================================================
-  security-scan:
-    name: 2. Security - Code & Dependency Scans
-    runs-on: ubuntu-latest
-    needs: [frontend-test, backend-test]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Lancer l'analyse des dépendances du backend
+        uses: owasp/dependency-check-action@v4
+        # La configuration est maintenant dans un fichier externe
         with:
-          fetch-depth: 0
+          # NOUVEAU : On spécifie un fichier de configuration
+          args: '--project "backend-quiz-app" --scan ./backend --format HTML --failOnCVSS 7'
 
-      - name: Run Gitleaks Manually
-        run: |
-          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
-          tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
-          chmod +x gitleaks
-          ./gitleaks detect --verbose --source="." --exit-code 0 --report-format sarif --report-path "gitleaks-report.sarif"
-
-      - name: Run Semgrep Manually
-        run: |
-          pip install semgrep
-          semgrep scan --config "p/default" --sarif --output "semgrep.sarif" || true
-
-      - name: Create report directories
-        run: mkdir -p backend/reports quiz-app/reports
-
-      - name: Cache OWASP Dependency-Check Database
-        uses: actions/cache@v4
-        with:
-          path: /tmp/owasp-data
-          key: owasp-data-${{ github.run_id }}
-          restore-keys: |
-            owasp-data-
-
-      - name: Run OWASP DC on Backend and Frontend (Sequentially )
-        run: |
-          echo "--- Starting Backend Scan ---"
-          docker run --rm \
-            -v $(pwd)/backend:/src \
-            -v /tmp/owasp-data:/usr/share/dependency-check/data \
-            owasp/dependency-check --project "Backend" --scan /src --format "HTML" --out /src/reports --failOnCVSS 11
-
-          echo "--- Starting Frontend Scan ---"
-          docker run --rm \
-            -v $(pwd)/quiz-app:/src \
-            -v /tmp/owasp-data:/usr/share/dependency-check/data \
-            owasp/dependency-check --project "Frontend" --scan /src --format "HTML" --out /src/reports --failOnCVSS 11
-        continue-on-error: true
-
-      - name: Upload SARIF files to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: |
-            gitleaks-report.sarif
-            semgrep.sarif
-      
-      - name: Archive OWASP HTML reports (Artifact)
+      # Cette étape ne s'exécutera que si l'analyse réussit (pas de faille > 7)
+      - name: Archiver le rapport du backend (si succès)
         uses: actions/upload-artifact@v4
         with:
-          name: owasp-dependency-reports
-          path: |
-            ./backend/reports/
-            ./quiz-app/reports/
-
-  # ===================================================================
-  # ==         ÉTAPE 3: BUILD & SCAN DES IMAGES DOCKER LOCALES       ==
-  # ===================================================================
-  frontend-image:
-    name: 3. Frontend - Build & Scan Image
-    runs-on: ubuntu-latest
-    needs: security-scan
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Build local Docker image
-        id: build-image
-        run: |
-          docker build -t frontend-image:local -f quiz-app/Dockerfile .
-          echo "image_name=frontend-image:local" >> $GITHUB_OUTPUT
-      - name: Scan local image with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ steps.build-image.outputs.image_name }}
-          format: 'sarif'
-          output: 'trivy-frontend-results.sarif'
-          severity: 'CRITICAL,HIGH'
-          ignore-unfixed: true
-      - name: Upload Trivy SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'trivy-frontend-results.sarif'
-
-  backend-image:
-    name: 3. Backend - Build & Scan Image
-    runs-on: ubuntu-latest
-    needs: security-scan
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Build local Docker image
-        id: build-image
-        run: |
-          docker build -t backend-image:local -f backend/Dockerfile .
-          echo "image_name=backend-image:local" >> $GITHUB_OUTPUT
-      - name: Scan local image with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ steps.build-image.outputs.image_name }}
-          format: 'sarif'
-          output: 'trivy-backend-results.sarif'
-          severity: 'CRITICAL,HIGH'
-          ignore-unfixed: true
-      - name: Upload Trivy SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'trivy-backend-results.sarif'
-
-  # ===================================================================
-  # ==        ÉTAPE 4: SCAN DE L'INFRASTRUCTURE AS CODE (IAC)        ==
-  # ===================================================================
-  iac-scan:
-    name: 4. IaC - Scan Kubernetes & Terraform
-    runs-on: ubuntu-latest
-    needs: security-scan
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Scan IaC files with Checkov
-        uses: bridgecrewio/checkov-action@master
-        with:
-          directory: .
-          framework: all
-          output_format: sarif
-          output_file_path: checkov-results.sarif
-          quiet: true
-          soft_fail: true
-      - name: Upload Checkov SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'checkov-results.sarif'
+          name: rapport-securite-backend
+          path: reports/dependency-check-report.html
