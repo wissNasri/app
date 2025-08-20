@@ -9,7 +9,7 @@ on:
 
 jobs:
   scan-backend:
-    name: 1. Analyse du Backend (Node.js/Express)
+    name: Analyse du Backend (Node.js/Express)
     runs-on: ubuntu-latest
 
     steps:
@@ -31,7 +31,8 @@ jobs:
         working-directory: ./backend
 
       - name: Lancer l'analyse des dépendances du backend
-        uses: dependency-check/Dependency-Check_Action@1.0.0
+        uses: dependency-check/Dependency-Check_Action@main
+        id: Depcheck
         with:
           project: "backend-quiz-app"
           path: "./backend"
@@ -41,12 +42,8 @@ jobs:
             --enableRetired
             --out ./backend/reports
 
-      - name: Afficher le rapport dans la console
-        run: cat ./backend/reports/dependency-check-report.html
-
-      - name: Archiver le rapport du backend
-        if: always()
+      - name: Upload Test results
         uses: actions/upload-artifact@v4
         with:
-          name: rapport-securite-backend
-          path: ./backend/reports/dependency-check-report.html
+          name: Depcheck report
+          path: ./backend/reports
