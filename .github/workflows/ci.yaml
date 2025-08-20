@@ -17,7 +17,7 @@ jobs:
       - name: Nettoyer workspace précédent
         run: |
           echo "Nettoyage du workspace pour éviter les problèmes de permissions..."
-          sudo rm -rf /home/nasri/iovision/reactjs-quiz-app/actions-runner/_work/app/app/*
+          sudo rm -rf $GITHUB_WORKSPACE/*
 
       # --------------------------------------------------
       - name: Checkout du code
@@ -32,11 +32,11 @@ jobs:
       # --------------------------------------------------
       - name: Installer les dépendances du frontend
         run: npm install
-        working-directory: ./quiz-app
+        working-directory: $GITHUB_WORKSPACE/quiz-app
 
       # --------------------------------------------------
       - name: Créer le dossier de rapports
-        run: mkdir -p quiz-app/reports
+        run: mkdir -p $GITHUB_WORKSPACE/quiz-app/reports
 
       # --------------------------------------------------
       - name: Run Gitleaks Manually
@@ -44,12 +44,18 @@ jobs:
           wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
           tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
           chmod +x gitleaks
-          ./gitleaks detect --verbose --source="." --exit-code 0 --report-format sarif --report-path "quiz-app/reports/gitleaks-report.sarif"
+          ./gitleaks detect \
+            --verbose \
+            --source="$GITHUB_WORKSPACE/quiz-app" \
+            --exit-code 0 \
+            --report-format sarif \
+            --report-path "$GITHUB_WORKSPACE/quiz-app/reports/gitleaks-report.sarif"
 
       - name: Run Semgrep Manually
         run: |
           pip install semgrep
-          semgrep scan --config "p/default" --sarif --output "quiz-app/reports/semgrep.sarif" || true
+          semgrep scan --config "p/default" \
+            --sarif --output "$GITHUB_WORKSPACE/quiz-app/reports/semgrep.sarif" || true
 
       # --------------------------------------------------
       - name: Lancer l'analyse des dépendances du frontend (OWASP)
@@ -57,9 +63,9 @@ jobs:
         id: Depcheck
         with:
           project: "frontend-quiz-app"
-          path: "./quiz-app"
+          path: "$GITHUB_WORKSPACE/quiz-app"
           format: "HTML"
-          out: "./quiz-app/reports"
+          out: "$GITHUB_WORKSPACE/quiz-app/reports"
           args: >
             --enableRetired
         env:
@@ -70,19 +76,19 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gitleaks-frontend-report
-          path: quiz-app/reports/gitleaks-report.sarif
+          path: $GITHUB_WORKSPACE/quiz-app/reports/gitleaks-report.sarif
           if-no-files-found: warn
 
       - name: Upload Semgrep report
         uses: actions/upload-artifact@v4
         with:
           name: semgrep-frontend-report
-          path: quiz-app/reports/semgrep.sarif
+          path: $GITHUB_WORKSPACE/quiz-app/reports/semgrep.sarif
           if-no-files-found: warn
 
       - name: Upload OWASP report
         uses: actions/upload-artifact@v4
         with:
           name: owasp-frontend-report
-          path: quiz-app/reports/dependency-check-report.html
+          path: $GITHUB_WORKSPACE/quiz-app/reports/dependency-check-report.html
           if-no-files-found: warn
