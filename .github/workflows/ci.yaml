@@ -1,16 +1,12 @@
-# Nom du workflow
 name: Analyse de Sécurité MERN (avec échec sur vulnérabilité critique)
 
-# Déclencheurs
 on:
   push:
     branches: [ main ]
-
+  
   workflow_dispatch:
 
-# Jobs à exécuter
 jobs:
-  # --- JOB POUR LE BACKEND ---
   scan-backend:
     name: 1. Analyse du Backend (Node.js/Express)
     runs-on: ubuntu-latest
@@ -18,6 +14,11 @@ jobs:
     steps:
       - name: Checkout du code
         uses: actions/checkout@v4
+
+      - name: Debug - Vérifier arborescence
+        run: |
+          pwd
+          ls -R
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -29,18 +30,17 @@ jobs:
         working-directory: ./backend
 
       - name: Lancer l'analyse des dépendances du backend
-        # CORRECTION ICI : Ajout de @v4 à la fin de l'action
         uses: dependency-check/Dependency-Check_Action@1.0.0
-
         with:
-          args: '--project "backend-quiz-app" --scan ./backend --format HTML --failOnCVSS 7'
+          project: "backend-quiz-app"
+          path: "./backend"                # ← chemin correct
+          format: "HTML"
+          out: "./backend/reports"
+          failOnCVSS: 7
 
-      - name: Archiver le rapport du backend (si succès)
-        # On vérifie que l'étape précédente n'a pas échoué
-        if: success()
+      - name: Archiver le rapport du backend (toujours)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: rapport-securite-backend
-          path: reports/dependency-check-report.html
-
- 
+          path: ./backend/reports/dependency-check-report.html
