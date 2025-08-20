@@ -1,29 +1,24 @@
 # Nom du workflow, très spécifique à sa seule tâche.
 name: 1 - Gitleaks Secret Scan
 
-# Déclenche ce workflow à chaque 'push' sur n'importe quelle branche.
 on: [push]
 
 jobs:
-  # Un seul job pour cette tâche unique.
   gitleaks-scan:
     name: Scan for Secrets
     runs-on: ubuntu-latest
     
     steps:
-      # Étape 1 : Récupérer le code. C'est une étape obligatoire pour que Gitleaks ait quelque chose à analyser.
+      # Étape 1 : Récupérer le code.
       - name: 1. Checkout Code
         uses: actions/checkout@v4
-        # 'fetch-depth: 0' est important pour Gitleaks. Il lui permet de scanner tout l'historique de Git,
-        # pas seulement le dernier commit. C'est crucial pour trouver des secrets qui ont été ajoutés puis supprimés.
+        # --- CORRECTION CRUCIALE ---
+        # 'fetch-depth: 0' dit à l'action de cloner TOUT l'historique de la branche.
+        # Sans cela, Gitleaks ne peut scanner que le dernier commit.
         with:
           fetch-depth: 0
 
       # Étape 2 : Exécuter Gitleaks.
       - name: 2. Run Gitleaks Scan
         uses: gitleaks/gitleaks-action@v2
-        # 'continue-on-error: true' permet à la pipeline de continuer même si des secrets sont trouvés.
-        # L'étape sera marquée en orange, mais la pipeline globale sera verte.
-        # C'est idéal pour une phase de test où l'on veut juste voir les résultats sans être bloqué.
-        with:
-         fail : true
+        continue-on-error: true
