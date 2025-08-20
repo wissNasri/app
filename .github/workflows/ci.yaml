@@ -1,4 +1,4 @@
-name: Comprehensive CI Pipeline for GitHub-Hosted Runners
+name: Comprehensive and Optimized CI Pipeline
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
   # ===================================================================
   frontend-test:
     name: 1. Frontend - Test & Build
-    runs-on: ubuntu-latest # Utilise un runner fourni par GitHub
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -44,7 +44,7 @@ jobs:
 
   backend-test:
     name: 1. Backend - Test
-    runs-on: ubuntu-latest # Utilise un runner fourni par GitHub
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -73,7 +73,7 @@ jobs:
   # ===================================================================
   security-scan:
     name: 2. Security - Code & Dependency Scans
-    runs-on: ubuntu-latest # Utilise un runner fourni par GitHub
+    runs-on: ubuntu-latest
     needs: [frontend-test, backend-test]
     steps:
       - name: Checkout code
@@ -91,7 +91,10 @@ jobs:
       - name: Run Semgrep
         uses: returntocorp/semgrep-action@v1
         with:
-          generateSarif: true
+          args: >-
+            --config "p/default"
+            --sarif
+            --output "semgrep.sarif"
 
       - name: Create report directories
         run: mkdir -p backend/reports quiz-app/reports
@@ -140,7 +143,7 @@ jobs:
   # ===================================================================
   frontend-image:
     name: 3. Frontend - Build & Scan Image
-    runs-on: ubuntu-latest # Utilise un runner fourni par GitHub
+    runs-on: ubuntu-latest
     needs: security-scan
     steps:
       - name: Checkout code
@@ -165,7 +168,7 @@ jobs:
 
   backend-image:
     name: 3. Backend - Build & Scan Image
-    runs-on: ubuntu-latest # Utilise un runner fourni par GitHub
+    runs-on: ubuntu-latest
     needs: security-scan
     steps:
       - name: Checkout code
@@ -193,7 +196,7 @@ jobs:
   # ===================================================================
   iac-scan:
     name: 4. IaC - Scan Kubernetes & Terraform
-    runs-on: ubuntu-latest # Utilise un runner fourni par GitHub
+    runs-on: ubuntu-latest
     needs: security-scan
     steps:
       - name: Checkout code
