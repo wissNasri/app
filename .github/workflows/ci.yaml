@@ -2,12 +2,8 @@
 name: 'SCA - Analyse Dépendances Frontend (quiz-app)'
 
 # Déclencheurs du workflow
-on:
-  push:
-    branches: [ main ] # Se déclenche sur un push sur la branche main
-    paths:
-      - 'quiz-app/**' # IMPORTANT: Ne se déclenche QUE si des fichiers dans quiz-app sont modifiés
-  workflow_dispatch: # Permet de lancer le workflow manuellement depuis l'interface GitHub
+on: [push]
+ 
 
 # Définition des jobs (tâches) à exécuter
 jobs:
