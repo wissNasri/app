@@ -25,4 +25,5 @@ jobs:
         # 'continue-on-error: true' permet à la pipeline de continuer même si des secrets sont trouvés.
         # L'étape sera marquée en orange, mais la pipeline globale sera verte.
         # C'est idéal pour une phase de test où l'on veut juste voir les résultats sans être bloqué.
-        continue-on-error: true
+        with:
+         fail : true
