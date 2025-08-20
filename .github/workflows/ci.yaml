@@ -33,18 +33,18 @@ jobs:
       - name: Lancer l'analyse des dépendances du backend
         uses: dependency-check/Dependency-Check_Action@main
         id: Depcheck
+        env:
+          JAVA_HOME: /opt/jdk
         with:
           project: "backend-quiz-app"
           path: "./backend"
           format: "HTML"
+          out: 'reports'
           args: >
             --failOnCVSS 7
             --enableRetired
-            --out ./backend/reports
+        
 
-      - name: Afficher le rapport dans la console
-        if: always()
-        run: cat ./backend/reports/dependency-check-report.html
 
       - name: Upload Test results
         if: always()
