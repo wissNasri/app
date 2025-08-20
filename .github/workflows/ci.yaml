@@ -23,11 +23,7 @@ jobs:
       - name: Checkout du code
         uses: actions/checkout@v4
 
-      # --------------------------------------------------
-      - name: Debug - Vérifier arborescence
-        run: |
-          pwd
-          ls -R
+      
 
       # --------------------------------------------------
       - name: Setup Node.js
@@ -40,9 +36,7 @@ jobs:
         run: npm install
         working-directory: ./backend
 
-      # --------------------------------------------------
-      - name: Créer dossier reports
-        run: mkdir -p ./backend/reports
+
 
       # --------------------------------------------------
       - name: Lancer l'analyse des dépendances du backend
@@ -58,12 +52,7 @@ jobs:
         env:
           JAVA_HOME: /opt/jdk
 
-      # --------------------------------------------------
-      - name: Fix permissions du dossier reports
-        run: |
-          echo "Correction des permissions pour éviter les erreurs EACCES..."
-          sudo chown -R $USER:$USER ./backend/reports
-          chmod -R 755 ./backend/reports
+  
 
       # --------------------------------------------------
       - name: Upload Test results
