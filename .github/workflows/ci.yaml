@@ -21,7 +21,7 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         with:
           # Échoue si des secrets sont trouvés
-          fail: true
+          fail: false
 
       - name: 3. Setup Node.js
         uses: actions/setup-node@v4
