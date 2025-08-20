@@ -28,4 +28,5 @@ jobs:
         with:
           project: "backend-quiz-app"
           path: "./backend"
+          format: "JSON" 
           failOnCVSS: 7
