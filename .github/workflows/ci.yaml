@@ -91,7 +91,7 @@ jobs:
       - name: Run Semgrep Manually
         run: |
           pip install semgrep
-          semgrep ci --config "p/default" --sarif --output "semgrep.sarif" --no-exit-on-findings
+          semgrep ci --config "p/default" --sarif --output "semgrep.sarif" --exit-zero
 
 
       - name: Create report directories
