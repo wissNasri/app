@@ -1,59 +1,94 @@
-# Nom du workflow qui apparaîtra dans l'onglet "Actions" de GitHub
-name: 'SCA - Analyse Dépendances Frontend (quiz-app)'
+# Nom du workflow, clair et descriptif
+name: 'Frontend CI - Build, Test & Security Scan'
 
-# Déclencheurs du workflow
-on: [push]
- 
+on:
+  # Déclencher la pipeline sur les pull requests qui ciblent la branche master
+  pull_request:
+    branches:
+      - main
+  # Permet aussi de le lancer manuellement depuis l'interface GitHub Actions
+  workflow_dispatch:
 
-# Définition des jobs (tâches) à exécuter
 jobs:
-  frontend-dependency-check:
-    # Le nom du job qui sera affiché
-    name: 'Scan SCA sur quiz-app'
-    # Le type de machine virtuelle sur laquelle le job va s'exécuter
+  # Nom du job unique pour le frontend
+  frontend-ci:
+    name: Frontend CI Pipeline
     runs-on: ubuntu-latest
 
-    # Les étapes du job
     steps:
-      # Étape 1: Récupérer le code source de votre dépôt
-      - name: 'Checkout du code source'
+      # Étape 1: Récupérer le code du dépôt
+      - name: '1. Checkout Code'
         uses: actions/checkout@v4
+        # Nécessaire pour que Gitleaks puisse scanner l'historique des commits
+        with:
+          fetch-depth: 0
 
-      # Étape 2: Configurer l'environnement Node.js
-      - name: 'Setup Node.js'
+      # Étape 2: Scanner les fuites de secrets avec Gitleaks
+      - name: '2. Scan for Secrets with Gitleaks'
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          # Fait échouer le job si des secrets sont trouvés
+          fail: true
+
+      # Étape 3: Mettre en place Node.js pour construire l'application React
+      - name: '3. Setup Node.js'
         uses: actions/setup-node@v4
         with:
-          node-version: '18' # Assurez-vous que c'est la bonne version pour votre projet
+          node-version: '20.x' # Utilise la version de Node.js spécifiée
 
-      # Étape 3: Installer les dépendances du Frontend (quiz-app)
-      - name: 'Installer les dépendances de quiz-app'
-        run: npm ci
-        working-directory: ./quiz-app # On spécifie le bon dossier !
+      # Étape 4: Installer les dépendances et exécuter les tests de base
+      - name: '4. Install Dependencies & Run Basic Checks'
+        # Spécifie le répertoire de travail pour toutes les commandes de cette étape
+        working-directory: ./quiz-app
+        run: |
+          echo "--- Installing Dependencies ---"
+          npm ci
+          echo "--- Running Linter ---"
+          npm run lint
+          echo "--- Running Tests ---"
+          npm test
+        env:
+          CI: true
 
-      # Étape 4: Exécuter OWASP Dependency-Check
-      - name: 'Exécuter OWASP Dependency-Check'
-        uses: dependency-check/Dependency-Check_Action@main
+      # Étape 5: Scanner les vulnérabilités du code avec Semgrep (SAST)
+      - name: '5. Scan Code with Semgrep (SAST)'
+        uses: semgrep/semgrep-action@v2
         with:
-          # Nom du projet qui apparaîtra dans le rapport
+          # Scanne uniquement le répertoire du frontend
+          paths: quiz-app/
+
+      # Étape 6: Scanner les dépendances avec OWASP Dependency-Check (SCA)
+      - name: '6. Scan Dependencies with OWASP Dependency-Check (SCA)'
+        uses: dependency-check/Dependency-Check_Action@v5
+        with:
+          # Scanne le projet qui se trouve dans le répertoire 'quiz-app'
           project: 'quiz-app-frontend'
-          # Chemin où scanner les dépendances. On cible précisément le dossier du frontend.
-          path: './quiz-app'
-          # Format du rapport généré
-          format: 'HTML,JUNIT'
-          # Arguments supplémentaires pour la sécurité et la configuration
-          args: >
-            --enableExperimental
-            --failOnCVSS 7
-            --out ./reports
-            # --failOnCVSS 7 : Fait échouer la pipeline si une vulnérabilité avec un score CVSS de 7 ou plus est trouvée.
-            # --out ./reports : Spécifie le dossier de sortie pour les rapports.
+          path: 'quiz-app'
+          format: 'HTML'
+          # Fait échouer le job si des vulnérabilités ÉLEVÉES ou CRITIQUES sont trouvées
+          fail-on-cvss: 8
 
-      # Étape 5: Uploader les rapports de scan en tant qu'artefacts
-      # S'exécute toujours pour que vous ayez accès au rapport même en cas d'échec du scan.
-      - name: 'Uploader le rapport Dependency-Check'
-        if: always()
-        uses: actions/upload-artifact@v4
+      # Étape 7: Construire l'image Docker localement (sans la pousser)
+      - name: '7. Build Local Docker Image'
+        working-directory: ./quiz-app
+        run: |
+          # Construit l'image et la tague localement. Elle n'est pas envoyée à un registre.
+          docker build -t frontend-local-image:latest .
+
+      # Étape 8: Scanner l'image Docker avec Trivy
+      - name: '8. Scan Docker Image with Trivy'
+        uses: aquasecurity/trivy-action@0.24.0
         with:
-          name: 'Rapport-SCA-Frontend'
-          path: ./reports # Le dossier contenant les rapports
+          image-ref: 'frontend-local-image:latest'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
 
+      # Étape 9: Construire l'application pour vérifier que le build passe
+      # Cette étape est un peu redondante si le Dockerfile fait déjà un `npm run build`,
+      # mais elle peut être utile pour s'assurer que les artefacts de build peuvent être générés.
+      - name: '9. Build Production Assets'
+        working-directory: ./quiz-app
+        run: npm run build
