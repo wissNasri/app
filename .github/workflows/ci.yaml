@@ -10,7 +10,8 @@ on:
 jobs:
   scan-backend:
     name: 1. Analyse du Backend (Node.js/Express)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
+
 
     steps:
       - name: Checkout du code
