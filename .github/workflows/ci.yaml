@@ -1,5 +1,4 @@
-# .github/workflows/gitleaks.yml
-name: Gitleaks Secret Scan
+name: Gitleaks Scan
 
 on:
   push:
@@ -8,21 +7,17 @@ on:
     branches: ["main"]
 
 jobs:
-  gitleaks-scan:
-    name: Run Gitleaks Secret Scanner
+  gitleaks:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Run Gitleaks
         uses: zricethezav/gitleaks-action@v2
-        with:
-          args: detect --source . --no-git -v --report-path gitleaks-report.json
 
-      - name: Upload report as artifact
+      - name: Upload report
         uses: actions/upload-artifact@v4
         with:
-          name: gitleaks-report
-          path: gitleaks-report.json
+          name: gitleaks-results
+          path: results.sarif
