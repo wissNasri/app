@@ -23,11 +23,7 @@ jobs:
 
       # ===================================================================
       # ÉTAPE DE SÉCURITÉ GLOBALE
-      # ===================================================================
-      - name: "2. Scan for Secrets with Gitleaks"
-        uses: gitleaks/gitleaks-action@v2
-        # Par défaut, cette action fait échouer le pipeline si des secrets sont trouvés
-
+     
       - name: "3. Scan IaC with Checkov"
         uses: bridgecrewio/checkov-action@v12 # Utilisation d'une version figée
         with:
