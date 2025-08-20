@@ -42,7 +42,12 @@ jobs:
             --enableRetired
             --out ./backend/reports
 
+      - name: Afficher le rapport dans la console
+        if: always()
+        run: cat ./backend/reports/dependency-check-report.html
+
       - name: Upload Test results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Depcheck report
