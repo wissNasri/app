@@ -18,7 +18,6 @@ jobs:
         run: |
           echo "Nettoyage du workspace pour éviter les problèmes de permissions..."
           sudo rm -rf $GITHUB_WORKSPACE/*
-
       # --------------------------------------------------
       - name: Checkout du code
         uses: actions/checkout@v4
@@ -50,14 +49,12 @@ jobs:
             --exit-code 0 \
             --report-format sarif \
             --report-path "quiz-app/reports/gitleaks-report.sarif"
-
       # --------------------------------------------------
       - name: Run Semgrep
         run: |
           pip install semgrep
           semgrep scan --config "p/default" \
             --sarif --output "quiz-app/reports/semgrep.sarif" || true
-
       # --------------------------------------------------
       - name: Lancer l'analyse des dépendances du frontend (OWASP)
         uses: dependency-check/Dependency-Check_Action@main
@@ -74,13 +71,22 @@ jobs:
 
       # --------------------------------------------------
       - name: Upload Gitleaks report
-        uses: github/codeql-action/upload-sarif@v3
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: quiz-app/reports/gitleaks-report.sarif
-          token: ${{ secrets.GITHUB_TOKEN }}   # ← utilisation du token automatique
+          name: gitleaks-frontend-report
+          path: quiz-app/reports/gitleaks-report.sarif
+          if-no-files-found: warn
 
       - name: Upload Semgrep report
-        uses: github/codeql-action/upload-sarif@v3
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: quiz-app/reports/semgrep.sarif
-          token: ${{ secrets.GITHUB_TOKEN }}   # ← utilisation du token automatique
+          name: semgrep-frontend-report
+          path: quiz-app/reports/semgrep.sarif
+          if-no-files-found: warn
+
+      - name: Upload OWASP report
+        uses: actions/upload-artifact@v4
+        with:
+          name: owasp-frontend-report
+          path: quiz-app/reports/dependency-check-report.html
+          if-no-files-found: warn
