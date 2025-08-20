@@ -1,5 +1,5 @@
 # Nom du workflow, reflétant l'ajout de l'analyse SAST.
-name: SAST Analysis
+name: 3 - SAST Analysis
 
 on: [push]
 
@@ -8,13 +8,11 @@ jobs:
     name: Frontend Security Analysis
     runs-on: ubuntu-latest
     permissions:
-      # Permission pour cloner le code.
       contents: read
-      # Permission nécessaire pour que Semgrep puisse uploader ses résultats.
       security-events: write
 
     steps:
-      # Étape 1 : Récupérer le code avec l'historique complet.
+      # Étape 1 : Récupérer le code.
       - name: 1. Checkout Code
         uses: actions/checkout@v4
         with:
@@ -24,11 +22,16 @@ jobs:
       - name: 2. Run Gitleaks Scan
         uses: gitleaks/gitleaks-action@v2
 
-      # Étape 3 : Installer les dépendances et exécuter les tests.
-      - name: 3. Install Dependencies & Run Tests
+      # --- SECTION CORRIGÉE ---
+      # Étape 3 : Configurer l'environnement Node.js.
+      - name: 3. Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      # Étape 4 : Installer les dépendances et exécuter les tests.
+      # C'est maintenant une étape séparée qui utilise 'run'.
+      - name: 4. Install Dependencies & Run Tests
         run: |
           npm install
           npm run lint
@@ -37,14 +40,9 @@ jobs:
         env:
           CI: true
 
-      # --- NOUVELLE ÉTAPE AJOUTÉE ---
-      # Étape 4 : Analyser le code source avec Semgrep (SAST).
-      - name: 4. Run Semgrep SAST Scan
-        # Utilise l'action officielle de Semgrep.
+      # Étape 5 : Analyser le code source avec Semgrep (SAST).
+      - name: 5. Run Semgrep SAST Scan
         uses: returntocorp/semgrep-action@v1
         with:
-          # On dit à Semgrep de se concentrer sur le dossier du frontend.
-          # C'est plus efficace que de scanner tout le dépôt.
-          # 'p/default' est un ensemble de règles de haute qualité maintenu par Semgrep.
           config: 'p/default'
         working-directory: ./quiz-app
