@@ -9,10 +9,16 @@ on:
 
 jobs:
   scan-backend:
-    name: 1. Analyse du Backend (Node.js/Express)
+    name: Analyse du Backend (Node.js/Express)
     runs-on: self-hosted
 
     steps:
+      # --------------------------------------------------
+      - name: Nettoyer workspace précédent
+        run: |
+          echo "Nettoyage du workspace pour éviter les problèmes de permissions..."
+          sudo rm -rf /home/nasri/iovision/reactjs-quiz-app/actions-runner/_work/app/app/*
+
       # --------------------------------------------------
       - name: Checkout du code
         uses: actions/checkout@v4
@@ -55,6 +61,7 @@ jobs:
       # --------------------------------------------------
       - name: Fix permissions du dossier reports
         run: |
+          echo "Correction des permissions pour éviter les erreurs EACCES..."
           sudo chown -R $USER:$USER ./backend/reports
           chmod -R 755 ./backend/reports
 
