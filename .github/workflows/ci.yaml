@@ -88,7 +88,6 @@ jobs:
   # JOB 3: Scanner les manifestes IaC (Checkov & Kubescape)
   # ==================================================================
   scan-iac-and-manifests:
-    # Ce job peut s'exécuter en parallèle des autres.
     runs-on: ubuntu-latest
     steps:
       - name: 1. Checkout Code
@@ -97,26 +96,27 @@ jobs:
       - name: 2. Scan Kubernetes manifests with Checkov
         uses: bridgecrewio/checkov-action@master
         with:
-          # Spécifie le dossier contenant vos fichiers YAML Kubernetes.
           directory: ./kubernetes-manifest
-          # Ne bloque pas la pipeline en cas de problème, affiche juste les résultats.
           soft_fail: true
 
       - name: 3. Scan Kubernetes manifests with Kubescape
+        # Utilise la version 'main' comme demandé
         uses: kubescape/github-action@main
         with:
-          # Spécifie le format de sortie pour une meilleure intégration.
+          # Format de sortie pour l'intégration avec l'onglet "Security"
           format: "sarif"
-          # Spécifie le nom du fichier de sortie.
+          # Nom du fichier de sortie
           outputFile: "kubescape-results.sarif"
-          # Spécifie le dossier à scanner.
-          scanPath: "./kubernetes-manifest"
-          # Ne bloque pas la pipeline, quel que soit le score de risque.
-          # C'est l'équivalent de 'soft_fail' pour Kubescape.
-          failThreshold: "101" # Le score va de 0 à 100, donc 101 n'est jamais atteint.
+          # Nom correct du paramètre pour spécifier le chemin à scanner
+          files: "./kubernetes-manifest"
+          # Nom correct du paramètre pour le seuil de blocage
+          # Bloque la pipeline si le nombre de contrôles échoués est supérieur à 0.
+          failedThreshold: "0"
+          # Seuil de sévérité. La pipeline ne bloquera que si un contrôle de niveau 'critical' échoue.
+          # Les niveaux sont : critical, high, medium, low.
+          severityThreshold: "critical"
 
       - name: 4. Upload Kubescape results to GitHub Security
-        # Kubescape ne télécharge pas automatiquement le rapport, nous devons le faire manuellement.
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: kubescape-results.sarif
