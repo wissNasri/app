@@ -1,5 +1,5 @@
 # Nom du workflow, reflétant l'ajout de l'analyse SAST.
-name: 3 - SAST Analysis
+name: SAST Analysis
 
 on: [push]
 
