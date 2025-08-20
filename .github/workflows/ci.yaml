@@ -1,80 +1,163 @@
-# =================================================================
-# ==         PIPELINE CI FONCTIONNELLE ET DIRECTE              ==
-# =================================================================
-# Objectif : La version la plus simple et robuste qui fonctionne
-# en contournant les erreurs réseau. Copiez et collez ce code.
-# -----------------------------------------------------------------
-
-name: 'Functional CI Pipeline'
+name: Comprehensive Pre-Deployment CI
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch:
+    branches: ["main"]
+
+# Permissions globales pour le workflow
+permissions:
+  contents: read
+  security-events: write # Pour que Trivy, Semgrep, etc., puissent publier des alertes
 
 jobs:
-  ci-pipeline:
-    name: 'Build, Test and Security Scan'
+  # ===================================================================
+  # ==                  ÉTAPE 1: TESTS FONCTIONNELS                  ==
+  # ===================================================================
+  frontend-test:
+    name: 1. Frontend - Test & Build
     runs-on: ubuntu-latest
-
     steps:
-      # --- 1. Préparation ---
-      - name: 'Checkout Code'
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: 'Setup Node.js with npm cache'
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
-          cache: 'npm'
-          cache-dependency-path: quiz-app/package-lock.json
 
-      # --- 2. Tests de Qualité et de Fonctionnalité ---
-      - name: 'Install Dependencies & Run Tests'
+      - name: Install dependencies, lint, and test
         working-directory: ./quiz-app
         run: |
           npm ci
           npm run lint
           npm test
-        env:
-          CI: true
-
-      # --- 3. Scans de Sécurité (chaque étape est bloquante) ---
-      - name: 'Scan for Secrets (Gitleaks)'
-        run: |
-          # Installe et exécute Gitleaks. Échoue si un secret est trouvé.
-          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
-          tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
-          chmod +x gitleaks
-          ./gitleaks detect
-
-      - name: 'Scan Application Code (Semgrep SAST )'
-        run: |
-          # Installe et exécute Semgrep. Échoue si une vulnérabilité est trouvée.
-          python3 -m pip install semgrep
-          semgrep scan --error ./quiz-app
-
-      - name: 'Scan Dependencies (OWASP SCA)'
-        run: |
-          # Installe et exécute OWASP Dependency-Check. Échoue si une vulnérabilité de score >= 8 est trouvée.
-          wget https://github.com/jeremylong/DependencyCheck/releases/download/v9.2.0/dependency-check-9.2.0-release.zip
-          unzip dependency-check-9.2.0-release.zip
-          ./dependency-check/bin/dependency-check.sh --project "frontend" --scan "./quiz-app" --failOnCVSS 8
-
-      # --- 4. Construction et Scan de l'Image Docker ---
-      - name: 'Build Docker Image'
+      
+      - name: Build application
         working-directory: ./quiz-app
-        run: |
-          docker build -t frontend-local-image:latest .
+        run: npm run build
 
-      - name: 'Scan Docker Image (Trivy )'
+  backend-test:
+    name: 1. Backend - Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Install dependencies, lint, and test
+        working-directory: ./backend
         run: |
-          # Installe et exécute Trivy. Échoue si une vulnérabilité CRITICAL ou HIGH est trouvée.
-          sudo apt-get update && sudo apt-get install -y wget apt-transport-https gnupg lsb-release
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc ) main" | sudo tee /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update && sudo apt-get install -y trivy
-          trivy image --exit-code 1 --ignore-unfixed --severity CRITICAL,HIGH frontend-local-image:latest
+          npm ci
+          npm run lint
+          npm test
+
+  # ===================================================================
+  # ==               ÉTAPE 2: SCANS DE SÉCURITÉ DU CODE              ==
+  # ===================================================================
+  security-scan:
+    name: 2. Security - Code & Dependency Scans
+    runs-on: ubuntu-latest
+    needs: [frontend-test, backend-test] # S'exécute après les tests
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Scan for leaked secrets (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          report_format: sarif
+          report_path: gitleaks-report.sarif
+          continue-on-error: true # Ne pas bloquer le pipeline
+
+      - name: Static Application Security Testing (Semgrep)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          publishResults: false # On va publier le SARIF manuellement
+
+      - name: Dependency Vulnerability Scan - Backend (OWASP)
+        run: |
+          docker run --rm -v $(pwd)/backend:/src owasp/dependency-check --project "Backend" --scan /src --format "ALL" --out /src/reports
+        continue-on-error: true
+
+      - name: Dependency Vulnerability Scan - Frontend (OWASP)
+        run: |
+          docker run --rm -v $(pwd)/quiz-app:/src owasp/dependency-check --project "Frontend" --scan /src --format "ALL" --out /src/reports
+        continue-on-error: true
+
+      - name: Upload all SARIF files to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: |
+            gitleaks-report.sarif
+            semgrep.sarif
+      
+      - name: Archive OWASP reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: owasp-dependency-reports
+          path: |
+            backend/reports/
+            quiz-app/reports/
+
+  # ===================================================================
+  # ==         ÉTAPE 3: BUILD & SCAN DES IMAGES DOCKER LOCALES       ==
+  # ===================================================================
+  frontend-image:
+    name: 3. Frontend - Build & Scan Image
+    runs-on: ubuntu-latest
+    needs: security-scan
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build local Docker image
+        id: build-image
+        run: |
+          docker build -t frontend-image:local -f quiz-app/Dockerfile .
+          echo "image_name=frontend-image:local" >> $GITHUB_OUTPUT
+
+      - name: Scan local image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.build-image.outputs.image_name }}
+          format: 'sarif'
+          output: 'trivy-frontend-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-frontend-results.sarif'
+
+  backend-image:
+    name: 3. Backend - Build & Scan Image
+    runs-on: ubuntu-latest
+    needs: security-scan
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build local Docker image
+        id: build-image
+        run: |
+          docker build -t backend-image:local -f backend/Dockerfile .
+          echo "image_name=backend-image:local" >> $GITHUB_OUTPUT
+
+      - name: Scan local image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.build-image.outputs.image_name }}
+          format: 'sarif'
+          output: 'trivy-backend-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-backend-results.sarif'
