@@ -10,9 +10,11 @@ jobs:
   # ==================================================================
   code-analysis:
     runs-on: ubuntu-latest
+    permissions:
+      # Permission nécessaire pour que Gitleaks et Semgrep puissent uploader leurs résultats.
+      security-events: write
     strategy:
       matrix:
-        # Définit les modules à analyser.
         module: [quiz-app, backend]
     
     steps:
@@ -23,8 +25,11 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         continue-on-error: true
         with:
-          # Donne un nom de rapport unique pour chaque module pour éviter les conflits.
-          report_name: gitleaks-${{ matrix.module }}
+          # CORRECTION : Le paramètre correct est 'report_path' pour le nom du fichier.
+          # Nous créons un nom de fichier unique pour chaque module.
+          report_path: 'gitleaks-${{ matrix.module }}.sarif'
+          # CORRECTION : Nous nommons aussi l'artefact de manière unique.
+          artifact_name: 'gitleaks-report-${{ matrix.module }}'
 
       - name: 3. Setup Node.js
         uses: actions/setup-node@v4
@@ -43,24 +48,24 @@ jobs:
       - name: 5. Scan Application Code with Semgrep (SAST)
         uses: returntocorp/semgrep-action@v1
         with:
-          sourceRoot: ./${{ matrix.module }}
+          # CORRECTION : Le paramètre 'sourceRoot' est retiré.
+          # Nous laissons Semgrep scanner tout le projet. Il est assez intelligent
+          # pour trouver les fichiers pertinents.
+          # Pour uploader les résultats, Semgrep a besoin de la permission 'security-events: write'.
+          # J'ai ajouté cette permission au niveau du job.
+          publish_token: ${{ secrets.GITHUB_TOKEN }}
 
   # ==================================================================
   # JOB 2: Construire les images Docker et les scanner localement
   # ==================================================================
   build-and-scan-image:
-    # Ce job ne commencera que si le job 'code-analysis' a réussi.
     needs: code-analysis
     runs-on: ubuntu-latest
     permissions:
-      # Permission nécessaire pour que Trivy puisse envoyer les résultats à l'onglet "Security".
       security-events: write
-    
     strategy:
       matrix:
-        # Définit les images à construire.
         module: [quiz-app, backend]
-
     steps:
       - name: 1. Checkout Code
         uses: actions/checkout@v4
@@ -68,7 +73,6 @@ jobs:
       - name: 2. Build local Docker image
         id: build-image
         run: |
-          # Construit l'image Docker localement et lui donne un nom unique.
           docker build -t ${{ matrix.module }}:${{ github.sha }} .
           echo "image_name=${{ matrix.module }}:${{ github.sha }}" >> $GITHUB_OUTPUT
         working-directory: ./${{ matrix.module }}
@@ -76,27 +80,20 @@ jobs:
       - name: 3. Scan local image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
-          # Référence à l'image que nous venons de construire localement.
           image-ref: ${{ steps.build-image.outputs.image_name }}
           format: 'sarif'
-          # Donne un nom de rapport unique pour chaque image.
           output: 'trivy-${{ matrix.module }}.sarif'
-          # La pipeline échouera si des vulnérabilités CRITICAL ou HIGH sont trouvées.
           severity: 'CRITICAL,HIGH'
 
   # ==================================================================
   # JOB 3: Scanner les manifestes IaC (Checkov & Kubescape)
   # ==================================================================
   scan-iac-and-manifests:
+    name: Scan Kubernetes Manifests
     runs-on: ubuntu-latest
-# =================== AJOUT DE CETTE SECTION ===================
-    # Accorde explicitement les permissions nécessaires à ce job.
     permissions:
-      # Permission de lire le contenu du dépôt (nécessaire pour checkout).
       contents: read
-      # Permission d'écrire des événements de sécurité (nécessaire pour upload-sarif).
       security-events: write
-    # =========================================================
     steps:
       - name: 1. Checkout Code
         uses: actions/checkout@v4
@@ -104,23 +101,15 @@ jobs:
       - name: 2. Scan Kubernetes manifests with Checkov
         uses: bridgecrewio/checkov-action@master
         with:
-          directory: ./quiz-app
+          directory: ./kubernetes-manifest
           soft_fail: true
 
       - name: 3. Scan Kubernetes manifests with Kubescape
-        # Utilise la version 'main' comme demandé
         uses: kubescape/github-action@main
         with:
-          # Format de sortie pour l'intégration avec l'onglet "Security"
-          format: "sarif"
-          # Nom du fichier de sortie
-          outputFile: "kubescape-results.sarif"
-          # Nom correct du paramètre pour spécifier le chemin à scanner
           files: "./kubernetes-manifest"
-          # Nom correct du paramètre pour le seuil de blocage
-          # Bloque la pipeline si le nombre de contrôles échoués est supérieur à 0.
-          # Seuil de sévérité. La pipeline ne bloquera que si un contrôle de niveau 'critical' échoue.
-          # Les niveaux sont : critical, high, medium, low.
+          format: "sarif"
+          outputFile: "kubescape-results.sarif"
           severityThreshold: "critical"
 
       - name: 4. Upload Kubescape results to GitHub Security
