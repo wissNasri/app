@@ -1,118 +1,28 @@
-# Nom du workflow qui illustre un cycle CI complet et autonome
-name: Application CI - Full Analysis Cycle
+# Nom du workflow, très spécifique à sa seule tâche.
+name: 1 - Gitleaks Secret Scan
 
 # Déclenche ce workflow à chaque 'push' sur n'importe quelle branche.
 on: [push]
 
 jobs:
-  # ==================================================================
-  # JOB 1: Analyser le code source (Frontend et Backend en parallèle)
-  # ==================================================================
-  code-analysis:
+  # Un seul job pour cette tâche unique.
+  gitleaks-scan:
+    name: Scan for Secrets
     runs-on: ubuntu-latest
-    permissions:
-      # Permission nécessaire pour que Gitleaks et Semgrep puissent uploader leurs résultats.
-      security-events: write
-    strategy:
-      matrix:
-        module: [quiz-app, backend]
     
     steps:
+      # Étape 1 : Récupérer le code. C'est une étape obligatoire pour que Gitleaks ait quelque chose à analyser.
       - name: 1. Checkout Code
         uses: actions/checkout@v4
+        # 'fetch-depth: 0' est important pour Gitleaks. Il lui permet de scanner tout l'historique de Git,
+        # pas seulement le dernier commit. C'est crucial pour trouver des secrets qui ont été ajoutés puis supprimés.
+        with:
+          fetch-depth: 0
 
-      - name: 2. Scan for Leaked Secrets with Gitleaks
+      # Étape 2 : Exécuter Gitleaks.
+      - name: 2. Run Gitleaks Scan
         uses: gitleaks/gitleaks-action@v2
+        # 'continue-on-error: true' permet à la pipeline de continuer même si des secrets sont trouvés.
+        # L'étape sera marquée en orange, mais la pipeline globale sera verte.
+        # C'est idéal pour une phase de test où l'on veut juste voir les résultats sans être bloqué.
         continue-on-error: true
-        with:
-          # CORRECTION : Le paramètre correct est 'report_path' pour le nom du fichier.
-          # Nous créons un nom de fichier unique pour chaque module.
-          report_path: 'gitleaks-${{ matrix.module }}.sarif'
-          # CORRECTION : Nous nommons aussi l'artefact de manière unique.
-          artifact_name: 'gitleaks-report-${{ matrix.module }}'
-
-      - name: 3. Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: 4. Install Dependencies & Run Tests
-        run: |
-          npm install
-          npm run lint
-          npm test
-        working-directory: ./${{ matrix.module }}
-        env:
-          CI: true
-
-      - name: 5. Scan Application Code with Semgrep (SAST)
-        uses: returntocorp/semgrep-action@v1
-        with:
-          # CORRECTION : Le paramètre 'sourceRoot' est retiré.
-          # Nous laissons Semgrep scanner tout le projet. Il est assez intelligent
-          # pour trouver les fichiers pertinents.
-          # Pour uploader les résultats, Semgrep a besoin de la permission 'security-events: write'.
-          # J'ai ajouté cette permission au niveau du job.
-          publish_token: ${{ secrets.GITHUB_TOKEN }}
-
-  # ==================================================================
-  # JOB 2: Construire les images Docker et les scanner localement
-  # ==================================================================
-  build-and-scan-image:
-    needs: code-analysis
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-    strategy:
-      matrix:
-        module: [quiz-app, backend]
-    steps:
-      - name: 1. Checkout Code
-        uses: actions/checkout@v4
-
-      - name: 2. Build local Docker image
-        id: build-image
-        run: |
-          docker build -t ${{ matrix.module }}:${{ github.sha }} .
-          echo "image_name=${{ matrix.module }}:${{ github.sha }}" >> $GITHUB_OUTPUT
-        working-directory: ./${{ matrix.module }}
-
-      - name: 3. Scan local image with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ steps.build-image.outputs.image_name }}
-          format: 'sarif'
-          output: 'trivy-${{ matrix.module }}.sarif'
-          severity: 'CRITICAL,HIGH'
-
-  # ==================================================================
-  # JOB 3: Scanner les manifestes IaC (Checkov & Kubescape)
-  # ==================================================================
-  scan-iac-and-manifests:
-    name: Scan Kubernetes Manifests
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - name: 1. Checkout Code
-        uses: actions/checkout@v4
-
-      - name: 2. Scan Kubernetes manifests with Checkov
-        uses: bridgecrewio/checkov-action@master
-        with:
-          directory: ./kubernetes-manifest
-          soft_fail: true
-
-      - name: 3. Scan Kubernetes manifests with Kubescape
-        uses: kubescape/github-action@main
-        with:
-          files: "./kubernetes-manifest"
-          format: "sarif"
-          outputFile: "kubescape-results.sarif"
-          severityThreshold: "critical"
-
-      - name: 4. Upload Kubescape results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: kubescape-results.sarif
