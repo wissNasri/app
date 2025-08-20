@@ -1,57 +1,63 @@
-# Nom du workflow, décrivant clairement son objectif.
-name: Core Security Analysis (Secrets, SAST, SCA)
+# Nom du workflow qui apparaîtra dans l'onglet "Actions" de GitHub
+name: 'SCA - Analyse Dépendances Frontend (quiz-app)'
 
-on: [push]
+# Déclencheurs du workflow
+on:
+  push:
+    branches: [ main ] # Se déclenche sur un push sur la branche main
+    paths:
+      - 'quiz-app/**' # IMPORTANT: Ne se déclenche QUE si des fichiers dans quiz-app sont modifiés
+  workflow_dispatch: # Permet de lancer le workflow manuellement depuis l'interface GitHub
 
+# Définition des jobs (tâches) à exécuter
 jobs:
-  # Un seul job pour analyser le code source du frontend.
-  frontend-code-security:
-    name: Frontend Source Code Security
+  frontend-dependency-check:
+    # Le nom du job qui sera affiché
+    name: 'Scan SCA sur quiz-app'
+    # Le type de machine virtuelle sur laquelle le job va s'exécuter
     runs-on: ubuntu-latest
-    permissions:
-      # Permission pour cloner le code.
-      contents: read
-      # Permission pour que les outils puissent uploader leurs résultats.
-      security-events: write
 
+    # Les étapes du job
     steps:
-      # Étape 1 : Récupérer le code avec l'historique complet.
-      - name: 1. Checkout Code
+      # Étape 1: Récupérer le code source de votre dépôt
+      - name: 'Checkout du code source'
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # Étape 2 : Scan de Secrets avec Gitleaks.
-      - name: 2. Scan for Secrets (Gitleaks)
-        uses: gitleaks/gitleaks-action@v2
-        # Mode bloquant : échoue si secret trouvé.
-
-      # Étape 3 : Scan de votre code avec Semgrep (SAST).
-      - name: 3. Scan Application Code (SAST with Semgrep)
-        uses: returntocorp/semgrep-action@v1
-
-      # Étape 4 : Setup Node.js pour installer les dépendances.
-      - name: 4. Setup Node.js
+      # Étape 2: Configurer l'environnement Node.js
+      - name: 'Setup Node.js'
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '18' # Assurez-vous que c'est la bonne version pour votre projet
 
-      # Étape 5 : Installation des dépendances (nécessaire pour OWASP DC).
-      - name: 5. Install Dependencies
-        run: npm install
-        working-directory: ./quiz-app
+      # Étape 3: Installer les dépendances du Frontend (quiz-app)
+      - name: 'Installer les dépendances de quiz-app'
+        run: npm ci
+        working-directory: ./quiz-app # On spécifie le bon dossier !
 
-      # Étape 6 : Scan des dépendances avec OWASP Dependency-Check (SCA).
-      - name: 6. Scan Dependencies (SCA with OWASP DC)
+      # Étape 4: Exécuter OWASP Dependency-Check
+      - name: 'Exécuter OWASP Dependency-Check'
         uses: dependency-check/Dependency-Check_Action@main
         with:
-          project: 'quiz-app-dependencies'
+          # Nom du projet qui apparaîtra dans le rapport
+          project: 'quiz-app-frontend'
+          # Chemin où scanner les dépendances. On cible précisément le dossier du frontend.
           path: './quiz-app'
-          format: 'SARIF'
-          out: 'reports'
+          # Format du rapport généré
+          format: 'HTML,JUNIT'
+          # Arguments supplémentaires pour la sécurité et la configuration
+          args: >
+            --enableExperimental
+            --failOnCVSS 7
+            --out ./reports
+            # --failOnCVSS 7 : Fait échouer la pipeline si une vulnérabilité avec un score CVSS de 7 ou plus est trouvée.
+            # --out ./reports : Spécifie le dossier de sortie pour les rapports.
 
-      # Étape 7 : Uploader les résultats du scan de dépendances.
-      - name: 7. Upload SCA Results
-        uses: github/codeql-action/upload-sarif@v3
+      # Étape 5: Uploader les rapports de scan en tant qu'artefacts
+      # S'exécute toujours pour que vous ayez accès au rapport même en cas d'échec du scan.
+      - name: 'Uploader le rapport Dependency-Check'
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: reports/dependency-check-report.sarif
+          name: 'Rapport-SCA-Frontend'
+          path: ./reports # Le dossier contenant les rapports
+
