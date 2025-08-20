@@ -73,16 +73,14 @@ jobs:
           JAVA_HOME: /opt/jdk
 
       # --------------------------------------------------
-     
-
       - name: Upload Gitleaks report
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: quiz-app/reports/gitleaks-report.sarif
+          token: ${{ secrets.GITHUB_TOKEN }}   # ← utilisation du token automatique
 
       - name: Upload Semgrep report
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: quiz-app/reports/semgrep.sarif
-      
-
+          token: ${{ secrets.GITHUB_TOKEN }}   # ← utilisation du token automatique
