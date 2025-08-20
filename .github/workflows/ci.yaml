@@ -65,7 +65,7 @@ jobs:
         with:
           project: "frontend-quiz-app"
           path: "quiz-app"
-          format: "HTML,SARIF"
+          format: "HTML"
           out: "quiz-app/reports"
           args: >
             --enableRetired
@@ -75,8 +75,14 @@ jobs:
       # --------------------------------------------------
      
 
-      - name: Upload OWASP SARIF
+      - name: Upload Gitleaks report
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: 'quiz-app/reports/dependency-check-report.sarif'
+          sarif_file: quiz-app/reports/gitleaks-report.sarif
+
+      - name: Upload Semgrep report
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: quiz-app/reports/semgrep.sarif
+      
 
