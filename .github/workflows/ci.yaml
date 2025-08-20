@@ -108,13 +108,13 @@ jobs:
           docker run --rm \
             -v $(pwd)/backend:/src \
             -v /tmp/owasp-data:/usr/share/dependency-check/data \
-            owasp/dependency-check --project "Backend" --scan /src --format "HTML" --out /src/reports --failOnCvss 11
+            owasp/dependency-check --project "Backend" --scan /src --format "HTML" --out /src/reports --failOnCVSS 11
 
           echo "--- Starting Frontend Scan ---"
           docker run --rm \
             -v $(pwd)/quiz-app:/src \
             -v /tmp/owasp-data:/usr/share/dependency-check/data \
-            owasp/dependency-check --project "Frontend" --scan /src --format "HTML" --out /src/reports --failOnCvss 11
+            owasp/dependency-check --project "Frontend" --scan /src --format "HTML" --out /src/reports --failOnCVSS 11
         continue-on-error: true
 
       - name: Upload SARIF files to GitHub Security
