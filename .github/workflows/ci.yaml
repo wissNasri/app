@@ -81,7 +81,7 @@ jobs:
       - name: Scan Docker image with Trivy
         run: |
           # Installer Trivy avec le script officiel
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh |  sh
           trivy image --format json --output quiz-app/reports/trivy-report.json quiz-app-frontend:latest
 
       # --------------------------------------------------
