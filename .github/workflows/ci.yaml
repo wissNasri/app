@@ -1,5 +1,5 @@
 # Nom du workflow, clair et descriptif
-name: 'Frontend CI - Build, Test & Security Scan'
+name: 'Frontend CI - Build, Test & Security Scan (Manual Tools)'
 
 # Déclenche la pipeline sur les push vers la branche 'main'
 on:
@@ -22,25 +22,22 @@ jobs:
       - name: '1. Checkout Code'
         uses: actions/checkout@v4
         with:
-          # Récupère tout l'historique pour le scan Gitleaks
           fetch-depth: 0
 
-      # Étape 2: Scanner les fuites de secrets avec Gitleaks
+      # Étape 2: Installer et exécuter Gitleaks manuellement
       - name: '2. Scan for Secrets with Gitleaks'
-        uses: gitleaks/gitleaks-action@v2
-        with:
-          # Génère un rapport au format JSON
-          report_format: json
-          # Spécifie le nom du fichier de rapport
-          report_path: gitleaks-report.json
-          # Continue même si des secrets sont trouvés pour pouvoir publier l'artefact
-          fail: false
+        run: |
+          # Télécharge la version spécifique de Gitleaks et la rend exécutable
+          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
+          tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
+          chmod +x gitleaks
+          # Exécute le scan et fait échouer le script si des fuites sont trouvées
+          ./gitleaks detect --report-path gitleaks-report.json
 
       # Étape 2.1: Publier le rapport Gitleaks
       - name: '2.1. Upload Gitleaks Report'
         uses: actions/upload-artifact@v4
-        # S'exécute toujours, même si l'étape précédente a des "erreurs" logiques
-        if: always()
+        if: failure( ) # Ne s'exécute que si l'étape précédente a échoué
         with:
           name: gitleaks-report
           path: gitleaks-report.json
@@ -50,32 +47,26 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
-          # AMÉLIORATION : Active le cache pour les dépendances npm
           cache: 'npm'
-          # Spécifie où trouver le fichier qui détermine l'état du cache
           cache-dependency-path: quiz-app/package-lock.json
 
       # Étape 4: Installer les dépendances et exécuter les tests de base
       - name: '4. Install Dependencies & Run Basic Checks'
         working-directory: ./quiz-app
         run: |
-          echo "--- Installing Dependencies (will be fast if cached) ---"
           npm ci
-          echo "--- Running Linter ---"
           npm run lint
-          echo "--- Running Tests ---"
           npm test
         env:
           CI: true
 
-      # Étape 5: Scanner les vulnérabilités du code avec Semgrep (SAST)
+      # Étape 5: Installer et exécuter Semgrep manuellement
       - name: '5. Scan Code with Semgrep (SAST)'
-        uses: semgrep/semgrep-action@v2
-        with:
-          # Génère un rapport au format SARIF, un standard pour les outils d'analyse
-          sarif_output: semgrep.sarif
-          # Cible uniquement le répertoire du frontend
-          paths: quiz-app/
+        run: |
+          # Installe Semgrep via le gestionnaire de paquets Python
+          python3 -m pip install semgrep
+          # Exécute le scan sur le bon répertoire et génère un rapport SARIF
+          semgrep scan --sarif --output semgrep.sarif ./quiz-app
 
       # Étape 5.1: Publier le rapport Semgrep
       - name: '5.1. Upload Semgrep Report'
@@ -85,16 +76,17 @@ jobs:
           name: semgrep-report
           path: semgrep.sarif
 
-      # Étape 6: Scanner les dépendances avec OWASP Dependency-Check (SCA)
+      # Étape 6: Installer et exécuter OWASP Dependency-Check manuellement
       - name: '6. Scan Dependencies with OWASP Dependency-Check (SCA)'
-        uses: dependency-check/Dependency-Check_Action@v5
-        with:
-          project: 'quiz-app-frontend'
-          path: 'quiz-app'
-          # Génère un rapport HTML, facile à lire pour un humain
-          format: 'HTML'
-          # Ne fait pas échouer l'étape pour garantir que le rapport est toujours uploadé
-          fail-on-cvss: 0
+        run: |
+          # Télécharge l'outil OWASP Dependency-Check
+          wget https://github.com/jeremylong/DependencyCheck/releases/download/v9.2.0/dependency-check-9.2.0-release.zip
+          unzip dependency-check-9.2.0-release.zip
+          # Exécute le scan sur le répertoire de l'application
+          ./dependency-check/bin/dependency-check.sh --project "quiz-app-frontend" --scan "./quiz-app" --format HTML --out .
+          # Fait échouer le job si des vulnérabilités ÉLEVÉES sont trouvées (score > 7 )
+          # Note: cette commande est une vérification basique. L'outil peut être plus complexe à configurer.
+          ./dependency-check/bin/dependency-check.sh --project "quiz-app-frontend" --scan "./quiz-app" --failOnCVSS 7
 
       # Étape 6.1: Publier le rapport OWASP
       - name: '6.1. Upload OWASP Report'
@@ -102,8 +94,7 @@ jobs:
         if: always()
         with:
           name: owasp-dependency-check-report
-          # Le rapport est généré dans un répertoire temporaire par l'action
-          path: ${{ runner.temp }}/dependency-check-reports/
+          path: dependency-check-report.html
 
       # Étape 7: Construire l'image Docker localement
       - name: '7. Build Local Docker Image'
@@ -111,28 +102,16 @@ jobs:
         run: |
           docker build -t frontend-local-image:latest .
 
-      # Étape 8: Scanner l'image Docker avec Trivy
+      # Étape 8: Installer et exécuter Trivy manuellement
       - name: '8. Scan Docker Image with Trivy'
-        uses: aquasecurity/trivy-action@0.24.0
-        with:
-          image-ref: 'frontend-local-image:latest'
-          # Génère un rapport sous forme de tableau dans les logs
-          format: 'table'
-          # Et un rapport JSON pour l'artefact
-          output: 'trivy-results.json'
-          # Fait échouer la pipeline si des vulnérabilités sont trouvées
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
-
-      # Étape 8.1: Publier le rapport Trivy
-      - name: '8.1. Upload Trivy Report'
-        uses: actions/upload-artifact@v4
-        if: failure() # Ne s'exécute que si l'étape de scan Trivy a échoué
-        with:
-          name: trivy-report
-          path: trivy-results.json
+        run: |
+          # Installe Trivy en utilisant le script officiel
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc ) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+          # Exécute le scan
+          trivy image --format table --exit-code 1 --ignore-unfixed --vuln-type os,library --severity CRITICAL,HIGH frontend-local-image:latest
 
       # Étape 9: Construire les fichiers de production de l'application
       - name: '9. Build Production Assets'
