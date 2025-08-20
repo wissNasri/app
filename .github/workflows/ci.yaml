@@ -103,7 +103,7 @@ jobs:
           soft_fail: true
 
       - name: 3. Scan Kubernetes manifests with Kubescape
-        uses: kubescape/github-action@v0.4.0
+        uses: kubescape/github-action@main
         with:
           # Spécifie le format de sortie pour une meilleure intégration.
           format: "sarif"
