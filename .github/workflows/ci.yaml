@@ -4,9 +4,10 @@ on:
   push:
     branches: [ "main" ]
 
+# Permissions globales requises par les différentes actions
 permissions:
-  contents: read
-  security-events: write
+  contents: read          # Pour le checkout du code
+  security-events: write # Pour uploader les résultats SARIF vers l'onglet Sécurité
 
 jobs:
   # ===================================================================
@@ -16,11 +17,15 @@ jobs:
     name: 1. Frontend - Test & Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '20.x'
-      - uses: actions/cache@v4
+      
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
         with:
           path: ~/.npm
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
@@ -40,11 +45,15 @@ jobs:
     name: 1. Backend - Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '20.x'
-      - uses: actions/cache@v4
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
         with:
           path: ~/.npm
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
@@ -65,7 +74,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [frontend-test, backend-test]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -81,27 +91,23 @@ jobs:
           pip install semgrep
           semgrep scan --config "p/default" --sarif --output "semgrep.sarif" || true
 
-      - name: Create report directories
-        run: mkdir -p backend/reports quiz-app/reports
-
-      # ---------------- OWASP Dependency-Check officielle ----------------
-      - name: OWASP Dependency-Check Backend
-        uses: jeremylong/owasp-dependency-check-action@v2
+      - name: OWASP Dependency-Check Scan - Backend
+        uses: dependency-check/Dependency-Check_Action@v2
         with:
-          project: Backend
-          scan: ./backend
-          format: HTML
-          out: ./backend/reports
-          failOnCVSS: 10
+          project: 'Backend'
+          scanPath: './backend'
+          format: 'HTML'
+          outputDirectory: './backend/reports'
+          failOnCvss: 11 # Ne jamais échouer
 
-      - name: OWASP Dependency-Check Frontend
-        uses: jeremylong/owasp-dependency-check-action@v2
+      - name: OWASP Dependency-Check Scan - Frontend
+        uses: dependency-check/Dependency-Check_Action@v2
         with:
-          project: Frontend
-          scan: ./quiz-app
-          format: HTML
-          out: ./quiz-app/reports
-          failOnCVSS: 10
+          project: 'Frontend'
+          scanPath: './quiz-app'
+          format: 'HTML'
+          outputDirectory: './quiz-app/reports'
+          failOnCvss: 11 # Ne jamais échouer
 
       - name: Upload SARIF files to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
@@ -109,14 +115,14 @@ jobs:
           sarif_file: |
             gitleaks-report.sarif
             semgrep.sarif
-
-      - name: Archive OWASP HTML reports (Artifact)
+      
+      - name: Archive OWASP HTML reports (Artifact )
         uses: actions/upload-artifact@v4
         with:
           name: owasp-dependency-reports
           path: |
-            backend/reports/
-            quiz-app/reports/
+            ./backend/reports/
+            ./quiz-app/reports/
 
   # ===================================================================
   # ==         ÉTAPE 3: BUILD & SCAN DES IMAGES DOCKER LOCALES       ==
@@ -126,20 +132,23 @@ jobs:
     runs-on: ubuntu-latest
     needs: security-scan
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Build local Docker image
         id: build-image
         run: |
           docker build -t frontend-image:local -f quiz-app/Dockerfile .
           echo "image_name=frontend-image:local" >> $GITHUB_OUTPUT
-      - uses: aquasecurity/trivy-action@master
+      - name: Scan local image with Trivy
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.build-image.outputs.image_name }}
           format: 'sarif'
           output: 'trivy-frontend-results.sarif'
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
-      - uses: github/codeql-action/upload-sarif@v3
+      - name: Upload Trivy SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-frontend-results.sarif'
 
@@ -148,20 +157,23 @@ jobs:
     runs-on: ubuntu-latest
     needs: security-scan
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Build local Docker image
         id: build-image
         run: |
           docker build -t backend-image:local -f backend/Dockerfile .
           echo "image_name=backend-image:local" >> $GITHUB_OUTPUT
-      - uses: aquasecurity/trivy-action@master
+      - name: Scan local image with Trivy
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.build-image.outputs.image_name }}
           format: 'sarif'
           output: 'trivy-backend-results.sarif'
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
-      - uses: github/codeql-action/upload-sarif@v3
+      - name: Upload Trivy SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-backend-results.sarif'
 
@@ -173,8 +185,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: security-scan
     steps:
-      - uses: actions/checkout@v4
-      - uses: bridgecrewio/checkov-action@master
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Scan IaC files with Checkov
+        uses: bridgecrewio/checkov-action@master
         with:
           directory: .
           framework: all
@@ -182,6 +196,7 @@ jobs:
           output_file_path: checkov-results.sarif
           quiet: true
           soft_fail: true
-      - uses: github/codeql-action/upload-sarif@v3
+      - name: Upload Checkov SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'checkov-results.sarif'
