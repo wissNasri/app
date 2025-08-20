@@ -1,3 +1,4 @@
+
 name: Comprehensive and Optimized CI Pipeline
 
 on:
@@ -65,7 +66,6 @@ jobs:
           npm ci
           npm run lint
           npm test
-
   # ===================================================================
   # ==               ÉTAPE 2: SCANS DE SÉCURITÉ DU CODE              ==
   # ===================================================================
@@ -84,13 +84,11 @@ jobs:
           wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
           tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
           chmod +x gitleaks
-          ./gitleaks detect --verbose --source="." --exit-code 0 --report-format sarif --report-path "gitleaks-report.sarif"
-
+          ./gitleaks detect --verbose --source="." --exit-code 1 --report-format sarif --report-path "gitleaks-report.sarif"
       - name: Run Semgrep Manually
         run: |
           pip install semgrep
-          semgrep scan --config "p/default" --sarif --output "semgrep.sarif" || true
-
+          semgrep scan --config "p/default" --sarif --output "semgrep.sarif"
       - name: Create report directories
         run: mkdir -p backend/reports quiz-app/reports
 
@@ -101,7 +99,6 @@ jobs:
           key: owasp-data-${{ github.run_id }}
           restore-keys: |
             owasp-data-
-
       - name: Run OWASP DC on Backend and Frontend (Sequentially )
         run: |
           echo "--- Starting Backend Scan ---"
@@ -109,13 +106,12 @@ jobs:
             -v $(pwd)/backend:/src \
             -v /tmp/owasp-data:/usr/share/dependency-check/data \
             owasp/dependency-check --project "Backend" --scan /src --format "HTML" --out /src/reports
-
           echo "--- Starting Frontend Scan ---"
           docker run --rm \
             -v $(pwd)/quiz-app:/src \
             -v /tmp/owasp-data:/usr/share/dependency-check/data \
             owasp/dependency-check --project "Frontend" --scan /src --format "HTML" --out /src/reports
-        continue-on-error: true
+
 
       - name: Upload SARIF files to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
@@ -131,7 +127,6 @@ jobs:
           path: |
             backend/reports/
             quiz-app/reports/
-
   # ===================================================================
   # ==         ÉTAPE 3: BUILD & SCAN DES IMAGES DOCKER LOCALES       ==
   # ===================================================================
