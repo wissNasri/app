@@ -1,5 +1,5 @@
-# Nom du workflow, très spécifique à sa seule tâche.
-name: 1 - Gitleaks Secret Scan
+# Nom du workflow
+name: 1 - Gitleaks Secret Scan (Strict)
 
 on: [push]
 
@@ -9,16 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      # Étape 1 : Récupérer le code.
+      # Étape 1 : Récupérer le code avec l'historique complet.
       - name: 1. Checkout Code
         uses: actions/checkout@v4
-        # --- CORRECTION CRUCIALE ---
-        # 'fetch-depth: 0' dit à l'action de cloner TOUT l'historique de la branche.
-        # Sans cela, Gitleaks ne peut scanner que le dernier commit.
+        # --- C'EST LA LIGNE LA PLUS IMPORTANTE ---
+        # Elle force le téléchargement de TOUT l'historique.
         with:
           fetch-depth: 0
 
       # Étape 2 : Exécuter Gitleaks.
       - name: 2. Run Gitleaks Scan
         uses: gitleaks/gitleaks-action@v2
-        continue-on-error: true
