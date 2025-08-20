@@ -18,6 +18,7 @@ jobs:
         run: |
           echo "Nettoyage du workspace pour éviter les problèmes de permissions..."
           sudo rm -rf $GITHUB_WORKSPACE/*
+
       # --------------------------------------------------
       - name: Checkout du code
         uses: actions/checkout@v4
@@ -49,12 +50,14 @@ jobs:
             --exit-code 0 \
             --report-format sarif \
             --report-path "quiz-app/reports/gitleaks-report.sarif"
+
       # --------------------------------------------------
       - name: Run Semgrep
         run: |
           pip install semgrep
           semgrep scan --config "p/default" \
             --sarif --output "quiz-app/reports/semgrep.sarif" || true
+
       # --------------------------------------------------
       - name: Lancer l'analyse des dépendances du frontend (OWASP)
         uses: dependency-check/Dependency-Check_Action@main
@@ -70,21 +73,20 @@ jobs:
           JAVA_HOME: /opt/jdk
 
       # --------------------------------------------------
-      - name: Upload Gitleaks report
-        uses: actions/upload-artifact@v4
+      - name: Upload Gitleaks report to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          name: gitleaks-frontend-report
-          path: quiz-app/reports/gitleaks-report.sarif
-          if-no-files-found: warn
+          sarif_file: quiz-app/reports/gitleaks-report.sarif
+          token: ${{ secrets.SARIFTOKEN}}
 
-      - name: Upload Semgrep report
-        uses: actions/upload-artifact@v4
+      - name: Upload Semgrep report to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          name: semgrep-frontend-report
-          path: quiz-app/reports/semgrep.sarif
-          if-no-files-found: warn
+          sarif_file: quiz-app/reports/semgrep.sarif
+          token: ${{ secrets.SARIFTOKEN }}
 
-      - name: Upload OWASP report
+      # --------------------------------------------------
+      - name: Upload OWASP HTML report as artifact
         uses: actions/upload-artifact@v4
         with:
           name: owasp-frontend-report
