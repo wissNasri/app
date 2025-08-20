@@ -45,9 +45,10 @@ jobs:
       - name: 6. Scan Dependencies (SCA with OWASP DC)
         uses: dependency-check/Dependency-Check_Action@main
         with:
-          projectName: 'quiz-app-dependencies'
-          scanPath: './quiz-app'
+          project: 'quiz-app-dependencies'
+          path: './quiz-app'
           format: 'SARIF'
+          out: 'reports'
 
       # Étape 7 : Uploader les résultats du scan de dépendances.
       - name: 7. Upload SCA Results
