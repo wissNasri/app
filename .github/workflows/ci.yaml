@@ -3,7 +3,8 @@ name: Analyse de Sécurité MERN (avec échec sur vulnérabilité critique)
 on:
   push:
     branches: [ main ]
-
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -35,14 +36,15 @@ jobs:
           project: "backend-quiz-app"
           path: "./backend"
           format: "HTML"
-          out: "./backend/reports"
           args: >
             --failOnCVSS 7
             --enableRetired
             --out ./backend/reports
 
+      - name: Afficher le rapport dans la console
+        run: cat ./backend/reports/dependency-check-report.html
 
-      - name: Archiver le rapport du backend (toujours)
+      - name: Archiver le rapport du backend
         if: always()
         uses: actions/upload-artifact@v4
         with:
