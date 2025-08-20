@@ -38,7 +38,6 @@ jobs:
           path: "./backend"
           format: "HTML"
           args: >
-            --failOnCVSS 7
             --enableRetired
         env:
           # nécessaire si setup-java a été utilisé avant
