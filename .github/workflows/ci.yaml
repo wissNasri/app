@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         # Définit les modules à analyser
-        module: [frontend, backend]
+        module: [quiz-app, backend]
     
     steps:
       - name: 1. Checkout Code
