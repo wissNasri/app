@@ -28,5 +28,4 @@ jobs:
         with:
           project: "backend-quiz-app"
           path: "./backend"
-          format: "CONSOLE"     # 👈 affiche directement dans la console
           failOnCVSS: 7
