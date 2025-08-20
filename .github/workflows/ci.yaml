@@ -1,9 +1,8 @@
-name: Analyse de Sécurité MERN (avec échec sur vulnérabilité critique)
+name: Analyse de Sécurité MERN (console only)
 
 on:
   push:
     branches: [ main ]
-  
   workflow_dispatch:
 
 jobs:
@@ -15,11 +14,6 @@ jobs:
       - name: Checkout du code
         uses: actions/checkout@v4
 
-      - name: Debug - Vérifier arborescence
-        run: |
-          pwd
-          ls -R
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -29,18 +23,10 @@ jobs:
         run: npm install
         working-directory: ./backend
 
-      - name: Lancer l'analyse des dépendances du backend
+      - name: Lancer l'analyse OWASP Dependency-Check (console)
         uses: dependency-check/Dependency-Check_Action@1.0.0
         with:
           project: "backend-quiz-app"
-          path: "./backend"                # ← chemin correct
-          format: "HTML"
-          out: "./backend/reports"
+          path: "./backend"
+          format: "CONSOLE"     # 👈 affiche directement dans la console
           failOnCVSS: 7
-
-      - name: Archiver le rapport du backend (toujours)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rapport-securite-backend
-          path: ./backend/reports/dependency-check-report.html
