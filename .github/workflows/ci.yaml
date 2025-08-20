@@ -48,15 +48,16 @@ jobs:
             --verbose \
             --source="quiz-app" \
             --exit-code 0 \
-            --report-format sarif \
-            --report-path "quiz-app/reports/gitleaks-report.sarif"
+            --report-format json \
+            --report-path "quiz-app/reports/gitleaks-report.json"
 
       # --------------------------------------------------
       - name: Run Semgrep
         run: |
           pip install semgrep
           semgrep scan --config "p/default" \
-            --sarif --output "quiz-app/reports/semgrep.sarif" || true
+            --output "quiz-app/reports/semgrep-report.json" \
+            --json || true
 
       # --------------------------------------------------
       - name: Lancer l'analyse des dépendances du frontend (OWASP)
@@ -65,7 +66,7 @@ jobs:
         with:
           project: "frontend-quiz-app"
           path: "quiz-app"
-          format: "HTML"
+          format: "JSON"
           out: "quiz-app/reports"
           args: >
             --enableRetired
@@ -79,32 +80,30 @@ jobs:
       # --------------------------------------------------
       - name: Scan Docker image with Trivy
         run: |
-          sudo apt-get update && sudo apt-get install -y wget
-          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.43.0_Linux-64bit.deb
-          sudo dpkg -i trivy_0.43.0_Linux-64bit.deb
+          # Installer Trivy avec le script officiel
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh
           trivy image --format json --output quiz-app/reports/trivy-report.json quiz-app-frontend:latest
-
 
       # --------------------------------------------------
       - name: Upload Gitleaks report
         uses: actions/upload-artifact@v4
         with:
           name: gitleaks-frontend-report
-          path: quiz-app/reports/gitleaks-report.sarif
+          path: quiz-app/reports/gitleaks-report.json
           if-no-files-found: warn
 
       - name: Upload Semgrep report
         uses: actions/upload-artifact@v4
         with:
           name: semgrep-frontend-report
-          path: quiz-app/reports/semgrep.sarif
+          path: quiz-app/reports/semgrep-report.json
           if-no-files-found: warn
 
       - name: Upload OWASP report
         uses: actions/upload-artifact@v4
         with:
           name: owasp-frontend-report
-          path: quiz-app/reports/dependency-check-report.html
+          path: quiz-app/reports/dependency-check-report.json
           if-no-files-found: warn
 
       - name: Upload Trivy report
