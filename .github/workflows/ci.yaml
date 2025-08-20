@@ -44,11 +44,7 @@ jobs:
           # nécessaire si setup-java a été utilisé avant
           JAVA_HOME: /opt/jdk
 
-      - name: Déplacer le rapport vers backend/reports
-        run: |
-          mkdir -p ./backend/reports
-          mv /github/workspace/reports/dependency-check-report.html ./backend/reports/
-
+  
       - name: Upload Test results
         uses: actions/upload-artifact@v4
         with:
