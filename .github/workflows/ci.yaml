@@ -1,11 +1,11 @@
-# Nom du workflow, reflétant l'ajout de l'analyse SAST.
-name: 3 - SAST Analysis
+# Nom du workflow, focalisé sur la CI du Frontend.
+name: Frontend CI Pipeline
 
 on: [push]
 
 jobs:
-  frontend-sast-check:
-    name: Frontend Security Analysis
+  frontend-ci:
+    name: Frontend Security and Quality Check
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -18,31 +18,41 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Étape 2 : Scanner les secrets.
+      # Étape 2 : Scanner les secrets dans tout le dépôt.
       - name: 2. Run Gitleaks Scan
         uses: gitleaks/gitleaks-action@v2
 
-      # --- SECTION CORRIGÉE ---
       # Étape 3 : Configurer l'environnement Node.js.
       - name: 3. Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      # Étape 4 : Installer les dépendances et exécuter les tests.
-      # C'est maintenant une étape séparée qui utilise 'run'.
-      - name: 4. Install Dependencies & Run Tests
+      # Étape 4 : Installer les dépendances et exécuter les tests pour le frontend.
+      - name: 4. Install Dependencies & Run Tests for Frontend
         run: |
           npm install
           npm run lint
           npm test
+        # On spécifie le dossier de travail pour les commandes npm.
         working-directory: ./quiz-app
         env:
           CI: true
 
-      # Étape 5 : Analyser le code source avec Semgrep (SAST).
-      - name: 5. Run Semgrep SAST Scan
+      # --- ÉTAPE SEMGREP CORRIGÉE ET AMÉLIORÉE ---
+      # Étape 5 : Analyser le code du frontend avec Semgrep (SAST).
+      - name: 5. Run Semgrep SAST Scan on Frontend
+        # On utilise l'action Semgrep pour installer l'outil, puis on l'exécute manuellement.
         uses: returntocorp/semgrep-action@v1
         with:
-          config: 'p/default'
-        working-directory: ./quiz-app
+          # On spécifie la commande à exécuter.
+          # 'semgrep ci' est la commande recommandée pour les environnements CI.
+          # On lui passe le dossier 'quiz-app' comme cible.
+          entryPoint: semgrep
+          args: 'ci --sarif --output=semgrep.sarif quiz-app/'
+
+      # Étape 6 : Uploader les résultats de Semgrep.
+      - name: 6. Upload Semgrep SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
