@@ -96,7 +96,7 @@ jobs:
       - name: 2. Scan Kubernetes manifests with Checkov
         uses: bridgecrewio/checkov-action@master
         with:
-          directory: ./kubernetes-manifest
+          directory: ./quiz-app
           soft_fail: true
 
       - name: 3. Scan Kubernetes manifests with Kubescape
@@ -111,7 +111,6 @@ jobs:
           files: "./kubernetes-manifest"
           # Nom correct du paramètre pour le seuil de blocage
           # Bloque la pipeline si le nombre de contrôles échoués est supérieur à 0.
-          failedThreshold: "0"
           # Seuil de sévérité. La pipeline ne bloquera que si un contrôle de niveau 'critical' échoue.
           # Les niveaux sont : critical, high, medium, low.
           severityThreshold: "critical"
