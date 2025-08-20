@@ -82,7 +82,7 @@ jobs:
         run: |
           # Installer Trivy avec le script officiel
           curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh
-          trivy image --format json --output quiz-app/reports/trivy-report.json quiz-app-frontend:latest
+          sudo trivy image --format json --output quiz-app/reports/trivy-report.json quiz-app-frontend:latest
 
       # --------------------------------------------------
       - name: Upload Gitleaks report
