@@ -89,6 +89,14 @@ jobs:
   # ==================================================================
   scan-iac-and-manifests:
     runs-on: ubuntu-latest
+# =================== AJOUT DE CETTE SECTION ===================
+    # Accorde explicitement les permissions nécessaires à ce job.
+    permissions:
+      # Permission de lire le contenu du dépôt (nécessaire pour checkout).
+      contents: read
+      # Permission d'écrire des événements de sécurité (nécessaire pour upload-sarif).
+      security-events: write
+    # =========================================================
     steps:
       - name: 1. Checkout Code
         uses: actions/checkout@v4
