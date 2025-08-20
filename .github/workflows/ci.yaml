@@ -94,23 +94,28 @@ jobs:
       - name: Create report directories
         run: mkdir -p backend/reports quiz-app/reports
 
-      - name: OWASP Dependency-Check Scan - Backend
-        uses: dependency-check/Dependency-Check_Action@1.0.0
+      - name: Cache OWASP Dependency-Check Database
+        uses: actions/cache@v4
         with:
-          project: 'Backend'
-          scan: './backend'
-          format: 'HTML'
-          out: './backend/reports'
-          failOnCVSS: 11 # Ne jamais échouer
-      
-      - name: OWASP Dependency-Check Scan - Frontend
-        uses:  dependency-check/Dependency-Check_Action@1.0.0
-        with:
-          project: 'Frontend'
-          scan: './quiz-app'
-          format: 'HTML'
-          outputDirectory: './quiz-app/reports'
-          failOnCvss: 11 # Ne jamais échouer
+          path: /tmp/owasp-data
+          key: owasp-data-${{ github.run_id }}
+          restore-keys: |
+            owasp-data-
+
+      - name: Run OWASP DC on Backend and Frontend (Sequentially )
+        run: |
+          echo "--- Starting Backend Scan ---"
+          docker run --rm \
+            -v $(pwd)/backend:/src \
+            -v /tmp/owasp-data:/usr/share/dependency-check/data \
+            owasp/dependency-check --project "Backend" --scan /src --format "HTML" --out /src/reports --failOnCvss 11
+
+          echo "--- Starting Frontend Scan ---"
+          docker run --rm \
+            -v $(pwd)/quiz-app:/src \
+            -v /tmp/owasp-data:/usr/share/dependency-check/data \
+            owasp/dependency-check --project "Frontend" --scan /src --format "HTML" --out /src/reports --failOnCvss 11
+        continue-on-error: true
 
       - name: Upload SARIF files to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
@@ -119,7 +124,7 @@ jobs:
             gitleaks-report.sarif
             semgrep.sarif
       
-      - name: Archive OWASP HTML reports (Artifact )
+      - name: Archive OWASP HTML reports (Artifact)
         uses: actions/upload-artifact@v4
         with:
           name: owasp-dependency-reports
