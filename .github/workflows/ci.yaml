@@ -1,5 +1,5 @@
 # Nom du workflow, clair et descriptif
-name: 'Frontend CI - Build, Test & Security Scan (Manual Tools)'
+name: 'Frontend CI - Build, Test & Security Scan (Marketplace Actions)'
 
 # Déclenche la pipeline sur les push vers la branche 'main'
 on:
@@ -24,23 +24,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Étape 2: Installer et exécuter Gitleaks manuellement
+      # Étape 2: Scanner les fuites de secrets avec Gitleaks
       - name: '2. Scan for Secrets with Gitleaks'
-        run: |
-          # Télécharge la version spécifique de Gitleaks et la rend exécutable
-          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
-          tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
-          chmod +x gitleaks
-          # Exécute le scan et fait échouer le script si des fuites sont trouvées
-          ./gitleaks detect --report-path gitleaks-report.json
-
-      # Étape 2.1: Publier le rapport Gitleaks
-      - name: '2.1. Upload Gitleaks Report'
-        uses: actions/upload-artifact@v4
-        if: failure( ) # Ne s'exécute que si l'étape précédente a échoué
+        uses: gitleaks/gitleaks-action@v2
         with:
-          name: gitleaks-report
-          path: gitleaks-report.json
+          fail: true
 
       # Étape 3: Mettre en place Node.js et le cache npm
       - name: '3. Setup Node.js with npm cache'
@@ -60,41 +48,19 @@ jobs:
         env:
           CI: true
 
-      # Étape 5: Installer et exécuter Semgrep manuellement
+      # Étape 5: Scanner les vulnérabilités du code avec Semgrep (SAST)
       - name: '5. Scan Code with Semgrep (SAST)'
-        run: |
-          # Installe Semgrep via le gestionnaire de paquets Python
-          python3 -m pip install semgrep
-          # Exécute le scan sur le bon répertoire et génère un rapport SARIF
-          semgrep scan --sarif --output semgrep.sarif ./quiz-app
-
-      # Étape 5.1: Publier le rapport Semgrep
-      - name: '5.1. Upload Semgrep Report'
-        uses: actions/upload-artifact@v4
-        if: always()
+        uses: semgrep/semgrep-action@v2
         with:
-          name: semgrep-report
-          path: semgrep.sarif
+          paths: quiz-app/
 
-      # Étape 6: Installer et exécuter OWASP Dependency-Check manuellement
+      # Étape 6: Scanner les dépendances avec OWASP Dependency-Check (SCA)
       - name: '6. Scan Dependencies with OWASP Dependency-Check (SCA)'
-        run: |
-          # Télécharge l'outil OWASP Dependency-Check
-          wget https://github.com/jeremylong/DependencyCheck/releases/download/v9.2.0/dependency-check-9.2.0-release.zip
-          unzip dependency-check-9.2.0-release.zip
-          # Exécute le scan sur le répertoire de l'application
-          ./dependency-check/bin/dependency-check.sh --project "quiz-app-frontend" --scan "./quiz-app" --format HTML --out .
-          # Fait échouer le job si des vulnérabilités ÉLEVÉES sont trouvées (score > 7 )
-          # Note: cette commande est une vérification basique. L'outil peut être plus complexe à configurer.
-          ./dependency-check/bin/dependency-check.sh --project "quiz-app-frontend" --scan "./quiz-app" --failOnCVSS 7
-
-      # Étape 6.1: Publier le rapport OWASP
-      - name: '6.1. Upload OWASP Report'
-        uses: actions/upload-artifact@v4
-        if: always()
+        uses: dependency-check/Dependency-Check_Action@v5
         with:
-          name: owasp-dependency-check-report
-          path: dependency-check-report.html
+          project: 'quiz-app-frontend'
+          path: 'quiz-app'
+          fail-on-cvss: 8
 
       # Étape 7: Construire l'image Docker localement
       - name: '7. Build Local Docker Image'
@@ -102,16 +68,16 @@ jobs:
         run: |
           docker build -t frontend-local-image:latest .
 
-      # Étape 8: Installer et exécuter Trivy manuellement
+      # Étape 8: Scanner l'image Docker avec Trivy
       - name: '8. Scan Docker Image with Trivy'
-        run: |
-          # Installe Trivy en utilisant le script officiel
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc ) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update
-          sudo apt-get install -y trivy
-          # Exécute le scan
-          trivy image --format table --exit-code 1 --ignore-unfixed --vuln-type os,library --severity CRITICAL,HIGH frontend-local-image:latest
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: 'frontend-local-image:latest'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
 
       # Étape 9: Construire les fichiers de production de l'application
       - name: '9. Build Production Assets'
