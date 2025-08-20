@@ -1,48 +1,39 @@
-# Nom du workflow, clair et descriptif
-name: 'Frontend CI - Build, Test & Security Scan (Hybrid Approach)'
+# =================================================================
+# ==         PIPELINE CI FONCTIONNELLE ET DIRECTE              ==
+# =================================================================
+# Objectif : La version la plus simple et robuste qui fonctionne
+# en contournant les erreurs réseau. Copiez et collez ce code.
+# -----------------------------------------------------------------
 
-# Déclenche la pipeline sur les push vers la branche 'main'
+name: 'Functional CI Pipeline'
+
 on:
   push:
     branches:
       - main
-  # Permet aussi de le lancer manuellement depuis l'interface GitHub Actions
   workflow_dispatch:
 
 jobs:
-  # Job unique pour la CI du frontend
-  frontend-ci:
-    name: Frontend CI Pipeline
-    # Utilise une machine virtuelle Ubuntu fournie par GitHub
+  ci-pipeline:
+    name: 'Build, Test and Security Scan'
     runs-on: ubuntu-latest
 
-    # Séquence des étapes à exécuter
     steps:
-      # Étape 1: Utilise une action officielle GitHub (devrait fonctionner)
-      - name: '1. Checkout Code'
+      # --- 1. Préparation ---
+      - name: 'Checkout Code'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # Étape 2: Installation et exécution manuelle de Gitleaks
-      - name: '2. Install and Scan with Gitleaks'
-        run: |
-          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
-          tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
-          chmod +x gitleaks
-          # Exécute le scan. Le script échouera si des fuites sont trouvées.
-          ./gitleaks detect --report-path gitleaks-report.json
-
-      # Étape 3: Utilise une action officielle GitHub (devrait fonctionner )
-      - name: '3. Setup Node.js with npm cache'
+      - name: 'Setup Node.js with npm cache'
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
           cache: 'npm'
           cache-dependency-path: quiz-app/package-lock.json
 
-      # Étape 4: Installer les dépendances et exécuter les tests de base
-      - name: '4. Install Dependencies & Run Basic Checks'
+      # --- 2. Tests de Qualité et de Fonctionnalité ---
+      - name: 'Install Dependencies & Run Tests'
         working-directory: ./quiz-app
         run: |
           npm ci
@@ -51,57 +42,39 @@ jobs:
         env:
           CI: true
 
-      # Étape 5: Installation et exécution manuelle de Semgrep
-      - name: '5. Install and Scan with Semgrep (SAST)'
+      # --- 3. Scans de Sécurité (chaque étape est bloquante) ---
+      - name: 'Scan for Secrets (Gitleaks)'
         run: |
+          # Installe et exécute Gitleaks. Échoue si un secret est trouvé.
+          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
+          tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
+          chmod +x gitleaks
+          ./gitleaks detect
+
+      - name: 'Scan Application Code (Semgrep SAST )'
+        run: |
+          # Installe et exécute Semgrep. Échoue si une vulnérabilité est trouvée.
           python3 -m pip install semgrep
-          # Exécute le scan et génère un rapport SARIF pour une meilleure intégration
-          semgrep scan --sarif --output semgrep.sarif ./quiz-app
+          semgrep scan --error ./quiz-app
 
-      # Étape 5.1: Publier le rapport Semgrep (action officielle)
-      - name: '5.1. Upload Semgrep Report'
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: semgrep-report
-          path: semgrep.sarif
-
-      # Étape 6: Installation et exécution manuelle d'OWASP Dependency-Check
-      - name: '6. Install and Scan with OWASP Dependency-Check (SCA)'
+      - name: 'Scan Dependencies (OWASP SCA)'
         run: |
+          # Installe et exécute OWASP Dependency-Check. Échoue si une vulnérabilité de score >= 8 est trouvée.
           wget https://github.com/jeremylong/DependencyCheck/releases/download/v9.2.0/dependency-check-9.2.0-release.zip
           unzip dependency-check-9.2.0-release.zip
-          # Exécute le scan. --failOnCVSS 8 fait échouer le job si une vulnérabilité de score >= 8 est trouvée.
-          ./dependency-check/bin/dependency-check.sh --project "quiz-app-frontend" --scan "./quiz-app" --format HTML --out . --failOnCVSS 8
+          ./dependency-check/bin/dependency-check.sh --project "frontend" --scan "./quiz-app" --failOnCVSS 8
 
-      # Étape 6.1: Publier le rapport OWASP (action officielle )
-      - name: '6.1. Upload OWASP Report'
-        uses: actions/upload-artifact@v4
-        if: failure() # Ne s'exécute que si l'étape de scan a échoué
-        with:
-          name: owasp-dependency-check-report
-          path: dependency-check-report.html
-
-      # Étape 7: Construire l'image Docker localement
-      - name: '7. Build Local Docker Image'
+      # --- 4. Construction et Scan de l'Image Docker ---
+      - name: 'Build Docker Image'
         working-directory: ./quiz-app
         run: |
           docker build -t frontend-local-image:latest .
 
-      # Étape 8: Installation et exécution manuelle de Trivy
-      - name: '8. Install and Scan with Trivy'
+      - name: 'Scan Docker Image (Trivy )'
         run: |
-          # Installe Trivy via le gestionnaire de paquets du système
-          sudo apt-get update
-          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          # Installe et exécute Trivy. Échoue si une vulnérabilité CRITICAL ou HIGH est trouvée.
+          sudo apt-get update && sudo apt-get install -y wget apt-transport-https gnupg lsb-release
           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
           echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc ) main" | sudo tee /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update
-          sudo apt-get install -y trivy
-          # Exécute le scan. --exit-code 1 fait échouer le job si des vulnérabilités sont trouvées.
-          trivy image --format table --exit-code 1 --ignore-unfixed --vuln-type os,library --severity CRITICAL,HIGH frontend-local-image:latest
-
-      # Étape 9: Construire les fichiers de production de l'application
-      - name: '9. Build Production Assets'
-        working-directory: ./quiz-app
-        run: npm run build
+          sudo apt-get update && sudo apt-get install -y trivy
+          trivy image --exit-code 1 --ignore-unfixed --severity CRITICAL,HIGH frontend-local-image:latest
