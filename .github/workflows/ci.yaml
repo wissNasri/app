@@ -98,7 +98,7 @@ jobs:
         uses: dependency-check/Dependency-Check_Action@1.0.0
         with:
           project: 'Backend'
-          scan: './backend'
+          scan: 'app/backend'
           format: 'HTML'
           outputDirectory: './backend/reports'
           failOnCvss: 11 # Ne jamais échouer
