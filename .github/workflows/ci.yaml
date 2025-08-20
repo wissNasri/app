@@ -39,6 +39,8 @@ jobs:
           args: >
             --failOnCVSS 7
             --enableRetired
+            --out ./backend/reports
+
 
       - name: Archiver le rapport du backend (toujours)
         if: always()
