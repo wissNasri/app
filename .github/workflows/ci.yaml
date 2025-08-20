@@ -84,6 +84,7 @@ jobs:
           sudo dpkg -i trivy_0.43.0_Linux-64bit.deb
           trivy image --format json --output quiz-app/reports/trivy-report.json quiz-app-frontend:latest
 
+
       # --------------------------------------------------
       - name: Upload Gitleaks report
         uses: actions/upload-artifact@v4
