@@ -92,7 +92,7 @@ jobs:
           semgrep scan --config "p/default" --sarif --output "semgrep.sarif" || true
 
       - name: OWASP Dependency-Check Scan - Backend
-        uses: dependency-check/Dependency-Check_Action@v2
+        uses: dependency-check/Dependency-Check_Action@1.1.0
         with:
           project: 'Backend'
           scanPath: './backend'
