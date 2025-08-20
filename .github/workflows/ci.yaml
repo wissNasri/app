@@ -30,7 +30,8 @@ jobs:
 
       - name: Lancer l'analyse des dépendances du backend
         # CORRECTION ICI : Ajout de @v4 à la fin de l'action
-        uses: owasp/dependency-check-action@v4
+        uses: dependency-check/Dependency-Check_Action@1.0.0
+
         with:
           args: '--project "backend-quiz-app" --scan ./backend --format HTML --failOnCVSS 7'
 
