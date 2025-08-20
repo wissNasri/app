@@ -22,39 +22,35 @@ jobs:
           fetch-depth: 0
 
       # Étape 2 : Scan de Secrets avec Gitleaks.
-      # C'est la vérification la plus rapide et la plus critique.
       - name: 2. Scan for Secrets (Gitleaks)
         uses: gitleaks/gitleaks-action@v2
-        # On le laisse en mode bloquant. Si un secret est trouvé, la pipeline s'arrête.
+        # Mode bloquant : échoue si secret trouvé.
 
       # Étape 3 : Scan de votre code avec Semgrep (SAST).
       - name: 3. Scan Application Code (SAST with Semgrep)
         uses: returntocorp/semgrep-action@v1
-        # L'action est assez intelligente pour trouver les fichiers pertinents et uploader les résultats.
 
-      # Étape 4 : Préparation pour le scan de dépendances.
-      # OWASP DC a besoin que les dépendances soient installées.
-      - name: 4. Install Dependencies for SCA
+      # Étape 4 : Setup Node.js pour installer les dépendances.
+      - name: 4. Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      # Étape 5 : Installation des dépendances (nécessaire pour OWASP DC).
+      - name: 5. Install Dependencies
         run: npm install
         working-directory: ./quiz-app
 
-      # Étape 5 : Scan des dépendances avec OWASP Dependency-Check (SCA).
-      - name: 5. Scan Dependencies (SCA with OWASP DC)
+      # Étape 6 : Scan des dépendances avec OWASP Dependency-Check (SCA).
+      - name: 6. Scan Dependencies (SCA with OWASP DC)
         uses: dependency-check/Dependency-Check_Action@main
         with:
           projectName: 'quiz-app-dependencies'
           scanPath: './quiz-app'
           format: 'SARIF'
-          # On peut ajouter des arguments pour affiner le scan si nécessaire.
-          # Par exemple, pour exclure les dépendances de développement :
-          # args: '--nodeaudit.dependency.type dev'
 
-      # Étape 6 : Uploader les résultats du scan de dépendances.
-      # Cette étape est nécessaire car l'action OWASP DC ne le fait pas automatiquement.
-      - name: 6. Upload SCA Results
+      # Étape 7 : Uploader les résultats du scan de dépendances.
+      - name: 7. Upload SCA Results
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: reports/dependency-check-report.sarif
