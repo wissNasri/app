@@ -1,16 +1,18 @@
-name: Application CI Pipeline
+# Nom du workflow qui illustre un cycle CI complet et autonome
+name: Application CI - Full Analysis Cycle
 
+# Déclenche ce workflow à chaque 'push' sur n'importe quelle branche.
 on: [push]
-  
+
 jobs:
   # ==================================================================
-  # Job pour analyser le code (Frontend et Backend en parallèle)
+  # JOB 1: Analyser le code source (Frontend et Backend en parallèle)
   # ==================================================================
   code-analysis:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # Définit les modules à analyser
+        # Définit les modules à analyser.
         module: [quiz-app, backend]
     
     steps:
@@ -21,87 +23,100 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         continue-on-error: true
         with:
+          # Donne un nom de rapport unique pour chaque module pour éviter les conflits.
           report_name: gitleaks-${{ matrix.module }}
-
 
       - name: 3. Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: 4. Install Dependencies for ${{ matrix.module }}
-        run: npm install
-        working-directory: ./${{ matrix.module }}
-
-      - name: 5. Run Linter & Tests for ${{ matrix.module }}
+      - name: 4. Install Dependencies & Run Tests
         run: |
+          npm install
           npm run lint
           npm test
         working-directory: ./${{ matrix.module }}
         env:
           CI: true
 
-      - name: 6. Scan Application Code with Semgrep (SAST)
+      - name: 5. Scan Application Code with Semgrep (SAST)
         uses: returntocorp/semgrep-action@v1
         with:
-          # Scanne uniquement le répertoire du module concerné
           sourceRoot: ./${{ matrix.module }}
 
-      - name: 7. Scan Dependencies with OWASP Dependency-Check (SCA)
-        # Vous pouvez utiliser une action du marketplace ou un script custom
-        # C'est une étape qui peut être longue, à optimiser si besoin
-        run: echo "Exécution de OWASP Dependency-Check sur ${{ matrix.module }}"
-        # Ici, vous intégreriez l'appel à l'outil OWASP DC
-
   # ==================================================================
-  # Job pour construire et scanner les images (après succès de l'analyse)
+  # JOB 2: Construire les images Docker et les scanner localement
   # ==================================================================
   build-and-scan-image:
-    needs: code-analysis # Dépend du succès du job précédent
+    # Ce job ne commencera que si le job 'code-analysis' a réussi.
+    needs: code-analysis
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      id-token: write # Nécessaire pour l'authentification OIDC avec AWS
-      security-events: write # Pour envoyer les résultats de Trivy à GitHub
+      # Permission nécessaire pour que Trivy puisse envoyer les résultats à l'onglet "Security".
+      security-events: write
     
     strategy:
       matrix:
-        # Définit les images à construire
-        module: [frontend, backend]
+        # Définit les images à construire.
+        module: [quiz-app, backend]
 
     steps:
       - name: 1. Checkout Code
         uses: actions/checkout@v4
 
-      - name: 2. Configure AWS Credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-role # Rôle IAM pour GHA
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: 3. Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: 4. Build, Tag, and Push Image to ECR
+      - name: 2. Build local Docker image
         id: build-image
-        env:
-          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-          IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/${{ matrix.module }}:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/${{ matrix.module }}:$IMAGE_TAG
-          echo "image_uri=$ECR_REGISTRY/${{ matrix.module }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          # Construit l'image Docker localement et lui donne un nom unique.
+          docker build -t ${{ matrix.module }}:${{ github.sha }} .
+          echo "image_name=${{ matrix.module }}:${{ github.sha }}" >> $GITHUB_OUTPUT
         working-directory: ./${{ matrix.module }}
 
-      - name: 5. Scan Pushed Image with Trivy
+      - name: 3. Scan local image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ steps.build-image.outputs.image_uri }}
+          # Référence à l'image que nous venons de construire localement.
+          image-ref: ${{ steps.build-image.outputs.image_name }}
           format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH' # La pipeline échouera si des vulnérabilités de ce niveau sont trouvées
-          # Trivy peut aussi scanner les dépendances (SCA) et les misconfigurations
-          scanners: vuln,secret,config
+          # Donne un nom de rapport unique pour chaque image.
+          output: 'trivy-${{ matrix.module }}.sarif'
+          # La pipeline échouera si des vulnérabilités CRITICAL ou HIGH sont trouvées.
+          severity: 'CRITICAL,HIGH'
 
-# Note : Le déploiement avec ArgoCD est déclenché par une mise à jour du dépôt GitOps,
-# qui serait une étape finale dans cette pipeline ou dans une pipeline de déploiement séparée.
+  # ==================================================================
+  # JOB 3: Scanner les manifestes IaC (Checkov & Kubescape)
+  # ==================================================================
+  scan-iac-and-manifests:
+    # Ce job peut s'exécuter en parallèle des autres.
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 2. Scan Kubernetes manifests with Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          # Spécifie le dossier contenant vos fichiers YAML Kubernetes.
+          directory: ./kubernetes-manifest
+          # Ne bloque pas la pipeline en cas de problème, affiche juste les résultats.
+          soft_fail: true
+
+      - name: 3. Scan Kubernetes manifests with Kubescape
+        uses: kubescape/github-action@v0.4.0
+        with:
+          # Spécifie le format de sortie pour une meilleure intégration.
+          format: "sarif"
+          # Spécifie le nom du fichier de sortie.
+          outputFile: "kubescape-results.sarif"
+          # Spécifie le dossier à scanner.
+          scanPath: "./kubernetes-manifest"
+          # Ne bloque pas la pipeline, quel que soit le score de risque.
+          # C'est l'équivalent de 'soft_fail' pour Kubescape.
+          failThreshold: "101" # Le score va de 0 à 100, donc 101 n'est jamais atteint.
+
+      - name: 4. Upload Kubescape results to GitHub Security
+        # Kubescape ne télécharge pas automatiquement le rapport, nous devons le faire manuellement.
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: kubescape-results.sarif
