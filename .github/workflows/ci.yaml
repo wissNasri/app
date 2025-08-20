@@ -65,7 +65,7 @@ jobs:
         with:
           project: "frontend-quiz-app"
           path: "quiz-app"
-          format: "HTML"
+          format: "HTML,SARIF"
           out: "quiz-app/reports"
           args: >
             --enableRetired
@@ -73,23 +73,10 @@ jobs:
           JAVA_HOME: /opt/jdk
 
       # --------------------------------------------------
-      - name: Upload Gitleaks report
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-frontend-report
-          path: quiz-app/reports/gitleaks-report.sarif
-          if-no-files-found: warn
+     
 
-      - name: Upload Semgrep report
-        uses: actions/upload-artifact@v4
+      - name: Upload OWASP SARIF
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          name: semgrep-frontend-report
-          path: quiz-app/reports/semgrep.sarif
-          if-no-files-found: warn
+          sarif_file: 'quiz-app/reports/dependency-check-report.sarif'
 
-      - name: Upload OWASP report
-        uses: actions/upload-artifact@v4
-        with:
-          name: owasp-frontend-report
-          path: quiz-app/reports/dependency-check-report.html
-          if-no-files-found: warn
