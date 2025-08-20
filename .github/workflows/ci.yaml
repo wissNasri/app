@@ -68,6 +68,7 @@ jobs:
         with:
           source-root: quiz-app/
           generate-sarif: true # Fait échouer le job si des failles sont trouvées ET génère le rapport
+          config: 'p/default' # Utilise l'ensemble de règles communautaires recommandées
 
       - name: "9. Upload Semgrep SARIF"
         uses: github/codeql-action/upload-sarif@v3
