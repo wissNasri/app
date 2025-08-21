@@ -41,7 +41,7 @@ jobs:
    
 
       - name: Analyze with SonarCloud
-        uses: sonarsource/sonarcloud-github-action@v4
+        uses: sonarsource/sonarcloud-scan-action@v4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -85,7 +85,7 @@ jobs:
      
 
       - name: Analyze with SonarCloud
-        uses: sonarsource/sonarcloud-github-action@v4
+        uses: sonarsource/sonarcloud-scan-action@v4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
