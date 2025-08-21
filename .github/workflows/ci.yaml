@@ -20,8 +20,8 @@ jobs:
         uses: bridgecrewio/checkov-action@v12
         with:
           directory: ./kubernetes-manifest
-          output_format: cli,json
-          output_file_path: console,quiz-app/reports/checkov-report.json
+          output_format: json
+          output_file_path: quiz-app/reports/checkov-report.json
         continue-on-error: true
 
       # --------------------------------------------------
