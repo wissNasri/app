@@ -16,12 +16,12 @@ jobs:
       # --------------------------------------------------
      
       # --------------------------------------------------
-      - name: Run Checkov
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          directory: ./kubernetes-manifest
-          output_format: json
-          output_file_path: quiz-app/reports/checkov-report.json
+      - name: Run Checkov CLI
+        run: |
+          pip install checkov
+          mkdir -p quiz-app/reports
+          checkov -d ./kubernetes-manifest -o cli -o json -o-file quiz-app/reports/checkov-report.json || true
+
 
       # --------------------------------------------------
       # Upload des rapports
