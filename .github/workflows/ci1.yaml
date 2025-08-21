@@ -38,9 +38,7 @@ jobs:
         run: npm run build
         working-directory: ./quiz-app
 
-              # Setup sonar-scanner
-      - name: Setup SonarQube
-        uses: warchant/setup-sonar-scanner@v5
+   
 
       - name: Analyze with SonarCloud
         uses: sonarsource/sonarcloud-github-action@v4
@@ -84,9 +82,7 @@ jobs:
         env:
           CI: true 
 
-              # Setup sonar-scanner
-      - name: Setup SonarQube
-        uses: warchant/setup-sonar-scanner@v5
+     
 
       - name: Analyze with SonarCloud
         uses: sonarsource/sonarcloud-github-action@v4
