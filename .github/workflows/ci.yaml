@@ -22,7 +22,6 @@ jobs:
           directory: ./kubernetes-manifest
           output_format: json
           output_file_path: quiz-app/reports/checkov-report.json
-        continue-on-error: true
 
       # --------------------------------------------------
       # Upload des rapports
