@@ -1,8 +1,10 @@
 name: React.js CI
 
 on:
-  pull_request:
-    branches: "main"
+  # Déclenche le workflow sur les poussées vers la branche main
+  push:
+    branches:
+      - main
 
 jobs:
   frontend-test:
