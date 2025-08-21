@@ -1,10 +1,8 @@
 name: React.js CI
 
 on:
-  # Déclenche le workflow sur les poussées vers la branche main
-  push:
-    branches:
-      - main
+  pull_request:
+    branches: "master"
 
 jobs:
   frontend-test:
@@ -15,28 +13,36 @@ jobs:
     strategy:
       matrix:
         node-version: [20.x]
+        architecture: [x64]
     steps:
-      - uses: actions/checkout@v4
+      - name: Check-out git repository  
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
+      - name: USE NODEJS ${{ matrix.node-version }} - ${{ matrix.architecture }}
+        uses: actions/setup-node@v4
 
-      - name: Install, lint, test, build
+      - name: Install project dependencies 
+        working-directory: ./quiz-app
         run: |
-          npm ci
+          npm i
           npm run lint
+          npm install --save-dev --save-exact prettier
           npm run prettier
           npm test
-          npm run build
-          
         env:
-          CI: true
+          CI: true 
 
-      - name: SonarCloud Analysis (Frontend)
-        uses: SonarSource/sonarqube-scan-action@v5
+      - name: Build
+        run: npm run build
+        working-directory: ./quiz-app
+
+              # Setup sonar-scanner
+      - name: Setup SonarQube
+        uses: warchant/setup-sonar-scanner@v8
+
+      - name: Analyze with SonarCloud
+        uses: sonarsource/sonarcloud-github-action@main
         env:
-        
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
@@ -48,6 +54,7 @@ jobs:
             -Dsonar.login=${{ secrets.SONAR_TOKEN }}
             -Dsonar.sources=src/
             -Dsonar.verbose=true
+        
   backend-test:
     runs-on: ubuntu-latest
     defaults:
@@ -77,12 +84,10 @@ jobs:
 
               # Setup sonar-scanner
       - name: Setup SonarQube
-        uses: warchant/setup-sonar-scanner@v5
+        uses: warchant/setup-sonar-scanner@v8
 
       - name: Analyze with SonarCloud
-        uses: sonarsource/sonarcloud-github-action@v4
-
-        
+        uses: sonarsource/sonarcloud-github-action@main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -95,11 +100,8 @@ jobs:
             -Dsonar.login=${{ secrets.SONAR_TOKEN }}
             -Dsonar.sources=.
             -Dsonar.verbose=true
+          
 
-
-
-
-            
   frontend-security:
     needs: frontend-test
     runs-on: ubuntu-latest
@@ -107,15 +109,15 @@ jobs:
       run:
         working-directory: ./quiz-app
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@main
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/node@v4
+        uses: snyk/actions/node@main
         continue-on-error: true # To make sure that SARIF upload gets called
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           
       - name: Install Snyk CLI
-        uses: snyk/actions/setup@v4
+        uses: snyk/actions/setup@main
         with:
           version: latest
         env:
@@ -126,7 +128,8 @@ jobs:
 
       - name: Snyk Code Test
         run: snyk code test --all-projects
-        continue-on-error: true          
+        continue-on-error: true
+
   backend-security:
     needs: backend-test
     runs-on: ubuntu-latest
@@ -134,15 +137,15 @@ jobs:
       run:
         working-directory: ./backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@main
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/node@v4
+        uses: snyk/actions/node@main
         continue-on-error: true # To make sure that SARIF upload gets called
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
          
       - name: Install Snyk CLI
-        uses: snyk/actions/setup@v4
+        uses: snyk/actions/setup@main
         with:
           version: latest
         env:
