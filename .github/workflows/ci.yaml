@@ -21,6 +21,8 @@ jobs:
       # --------------------------------------------------
       - name: Checkout du code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # Important pour Gitleaks
 
       # --------------------------------------------------
       - name: Setup Node.js
@@ -38,17 +40,15 @@ jobs:
         run: mkdir -p quiz-app/reports
 
       # --------------------------------------------------
-      - name: Run Gitleaks
-        run: |
-          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
-          tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
-          chmod +x gitleaks
-          ./gitleaks detect \
-            --verbose \
-            --source="quiz-app" \
-            --exit-code 0 \
-            --report-format json \
-            --report-path "quiz-app/reports/gitleaks-report.json"
+      - name: Run Gitleaks (via action officielle)
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          repo-path: ./quiz-app
+          format: json
+          output-path: quiz-app/reports/gitleaks-report.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       # --------------------------------------------------
       - name: Run Semgrep
         run: |
@@ -56,6 +56,7 @@ jobs:
           semgrep scan --config "p/default" \
             --output "quiz-app/reports/semgrep-report.json" \
             --json || true
+
       # --------------------------------------------------
       - name: Lancer l'analyse des dépendances du frontend (OWASP)
         uses: dependency-check/Dependency-Check_Action@main
