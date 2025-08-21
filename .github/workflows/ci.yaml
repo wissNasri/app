@@ -79,11 +79,22 @@ jobs:
 
       # --------------------------------------------------
       - name: Scan Docker image with Trivy
-        run: |
-          # Installer Trivy avec le script officiel
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh |  sh
-          trivy image --format json --output quiz-app/reports/trivy-report.json quiz-app-frontend:latest
-
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          # Référence de l'image à scanner (celle que nous venons de construire)
+          image-ref: 'quiz-app-frontend:latest'
+          
+          # Format de sortie pour le rapport
+          format: 'json'
+          output: 'quiz-app/reports/trivy-report.json'
+          
+          # Types de vulnérabilités à rechercher (système d'exploitation et bibliothèques)
+          vuln-type: 'os,library'
+          
+          # Niveaux de sévérité qui feront échouer le build (le workflow s'arrêtera)
+          severity: 'CRITICAL,HIGH'
+          
+        
       # --------------------------------------------------
       - name: Upload Gitleaks report
         uses: actions/upload-artifact@v4
