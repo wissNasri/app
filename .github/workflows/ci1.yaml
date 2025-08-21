@@ -1,7 +1,6 @@
 name: React.js CI
 
 on: [push]
-  
 
 jobs:
   frontend-test:
@@ -12,48 +11,37 @@ jobs:
     strategy:
       matrix:
         node-version: [20.x]
-        architecture: [x64]
     steps:
-      - name: Check-out git repository  
-        uses: actions/checkout@main
+      - uses: actions/checkout@v4
 
-      - name: USE NODEJS ${{ matrix.node-version }} - ${{ matrix.architecture }}
-        uses: actions/setup-node@main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
 
-      - name: Install project dependencies 
-        working-directory: ./quiz-app
+      - name: Install, lint, test, build
         run: |
-          npm i
+          npm ci
           npm run lint
-          npm install --save-dev --save-exact prettier
           npm run prettier
           npm test
+          npm run build
         env:
-          CI: true 
+          CI: true
 
-      - name: Build
-        run: npm run build
-        working-directory: ./quiz-app
-
-              # Setup sonar-scanner
-      - name: Setup SonarQube
-        uses: warchant/setup-sonar-scanner@v8
-
-      - name: Analyze with SonarCloud
-        uses: sonarsource/sonarcloud-github-action@v4.0.0
+      - name: SonarCloud Analysis (Frontend)
+        uses: SonarSource/sonarqube-scan-action@v5
         env:
-          GITHUB_TOKEN: ${{ secrets._GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
-          projectBaseDir: iovision
+          projectBaseDir: quiz-app
           args: >
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
-            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY_FRONTEND }}
             -Dsonar.host.url=${{ secrets.SONAR_URL }}
-            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
             -Dsonar.sources=src/
             -Dsonar.verbose=true
-        
+
   backend-test:
     runs-on: ubuntu-latest
     defaults:
@@ -62,43 +50,33 @@ jobs:
     strategy:
       matrix:
         node-version: [20.x]
-        architecture: [x64]
     steps:
-      - name: Check-out git repository  
-        uses: actions/checkout@main
+      - uses: actions/checkout@v4
 
-      - name: USE NODEJS ${{ matrix.node-version }} - ${{ matrix.architecture }}
-        uses: actions/setup-node@main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
 
-      - name: Install project dependencies 
-        working-directory: ./backend
+      - name: Install, lint, test
         run: |
-          npm i
+          npm ci
           npm run lint
-          npm install --save-dev --save-exact prettier
           npm run prettier
           npm test
         env:
-          CI: true 
+          CI: true
 
-              # Setup sonar-scanner
-      - name: Setup SonarQube
-        uses: warchant/setup-sonar-scanner@v8
-
-      - name: Analyze with SonarCloud
-        uses: sonarsource/sonarcloud-github-action@v4.0.0
+      - name: SonarCloud Analysis (Backend)
+        uses: SonarSource/sonarqube-scan-action@v5
         env:
-          GITHUB_TOKEN: ${{ secrets._GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           projectBaseDir: backend
           args: >
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
-            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY_BACKEND }}
             -Dsonar.host.url=${{ secrets.SONAR_URL }}
-            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
             -Dsonar.sources=.
             -Dsonar.verbose=true
-          
 
- 
