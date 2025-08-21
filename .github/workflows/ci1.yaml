@@ -43,7 +43,7 @@ jobs:
         uses: warchant/setup-sonar-scanner@v8
 
       - name: Analyze with SonarCloud
-        uses: sonarsource/sonarcloud-github-action@main
+        uses: sonarsource/sonarcloud-github-action@v4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -89,7 +89,7 @@ jobs:
         uses: warchant/setup-sonar-scanner@v8
 
       - name: Analyze with SonarCloud
-        uses: sonarsource/sonarcloud-github-action@main
+        uses: sonarsource/sonarcloud-github-action@v4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -111,15 +111,15 @@ jobs:
       run:
         working-directory: ./quiz-app
     steps:
-      - uses: actions/checkout@main
+      - uses: actions/checkout@v4
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/node@main
+        uses: snyk/actions/node@v4
         continue-on-error: true # To make sure that SARIF upload gets called
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           
       - name: Install Snyk CLI
-        uses: snyk/actions/setup@main
+        uses: snyk/actions/setup@v4
         with:
           version: latest
         env:
@@ -139,15 +139,15 @@ jobs:
       run:
         working-directory: ./backend
     steps:
-      - uses: actions/checkout@main
+      - uses: actions/checkout@v4
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/node@main
+        uses: snyk/actions/node@v4
         continue-on-error: true # To make sure that SARIF upload gets called
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
          
       - name: Install Snyk CLI
-        uses: snyk/actions/setup@main
+        uses: snyk/actions/setup@v4
         with:
           version: latest
         env:
