@@ -25,6 +25,7 @@ jobs:
           npm run prettier
           npm test
           npm run build
+          
         env:
           CI: true
 
