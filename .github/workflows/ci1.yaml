@@ -2,7 +2,6 @@ name: React.js CI
 
 on: [push]
   
-    
 
 jobs:
   frontend-test:
