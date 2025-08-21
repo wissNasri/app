@@ -126,7 +126,14 @@ jobs:
       - name: Snyk Code Test
         run: snyk code test --all-projects
         continue-on-error: true
+      - name: Snyk Monitor
+        run: snyk monitor --all-projects
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
+
+
+          
   backend-security:
     needs: backend-test
     runs-on: ubuntu-latest
