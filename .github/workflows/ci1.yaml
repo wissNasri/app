@@ -1,6 +1,10 @@
 name: React.js CI
 
-on: [push]
+on:
+  # Déclenche le workflow sur les poussées vers la branche main
+  push:
+    branches:
+      - main
 
 jobs:
   frontend-test:
@@ -33,7 +37,7 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v5
         env:
         
-          GITHUB_TOKEN: ${{ secrets._GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           projectBaseDir: quiz-app
