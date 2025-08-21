@@ -42,10 +42,8 @@ jobs:
       # --------------------------------------------------
       - name: Run Gitleaks (via action officielle)
         uses: gitleaks/gitleaks-action@v2
-        with:
-          repo-path: ./quiz-app
-          format: json
-          output-path: quiz-app/reports/gitleaks-report.json
+       
+        
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
