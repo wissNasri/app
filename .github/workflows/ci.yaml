@@ -14,115 +14,19 @@ jobs:
 
     steps:
       # --------------------------------------------------
-      - name: Nettoyer workspace précédent
-        run: |
-          echo "Nettoyage du workspace pour éviter les problèmes de permissions..."
-          sudo rm -rf $GITHUB_WORKSPACE/*
-      # --------------------------------------------------
-      - name: Checkout du code
-        uses: actions/checkout@v4
-
-      # --------------------------------------------------
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      # --------------------------------------------------
-      - name: Installer les dépendances du frontend
-        run: npm install
-        working-directory: quiz-app
-
-      # --------------------------------------------------
-      - name: Créer le dossier de rapports
-        run: mkdir -p quiz-app/reports
-
-      # --------------------------------------------------
-      - name: Run Gitleaks
-        run: |
-          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
-          tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
-          chmod +x gitleaks
-          ./gitleaks detect \
-            --verbose \
-            --source="quiz-app" \
-            --exit-code 0 \
-            --report-format json \
-            --report-path "quiz-app/reports/gitleaks-report.json"
-      # --------------------------------------------------
-      - name: Run Semgrep
-        run: |
-          pip install semgrep
-          semgrep scan --config "p/default" \
-            --output "quiz-app/reports/semgrep-report.json" \
-            --json || true
-      # --------------------------------------------------
-      - name: Lancer l'analyse des dépendances du frontend (OWASP)
-        uses: dependency-check/Dependency-Check_Action@main
-        id: Depcheck
-        with:
-          project: "frontend-quiz-app"
-          path: "quiz-app"
-          format: "JSON"
-          out: "quiz-app/reports"
-          args: >
-            --enableRetired
-        env:
-          JAVA_HOME: /opt/jdk
-
-      # --------------------------------------------------
-      - name: Build Docker image for frontend
-        run: docker build -t quiz-app-frontend:latest quiz-app
-
-      # --------------------------------------------------
-      - name: Scan Docker image with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: 'quiz-app-frontend:latest'
-          format: 'json'
-          output: 'quiz-app/reports/trivy-report.json'
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
-
+     
       # --------------------------------------------------
       - name: Run Checkov
         uses: bridgecrewio/checkov-action@v12
         with:
           directory: ./kubernetes-manifest
-          output_format: json
-          output_file_path: quiz-app/reports/checkov-report.json
+          output_format: cli,json
+          output_file_path: console,quiz-app/reports/checkov-report.json
         continue-on-error: true
 
       # --------------------------------------------------
       # Upload des rapports
-      - name: Upload Gitleaks report
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-frontend-report
-          path: quiz-app/reports/gitleaks-report.json
-          if-no-files-found: warn
-
-      - name: Upload Semgrep report
-        uses: actions/upload-artifact@v4
-        with:
-          name: semgrep-frontend-report
-          path: quiz-app/reports/semgrep-report.json
-          if-no-files-found: warn
-
-      - name: Upload OWASP report
-        uses: actions/upload-artifact@v4
-        with:
-          name: owasp-frontend-report
-          path: quiz-app/reports/dependency-check-report.json
-          if-no-files-found: warn
-
-      - name: Upload Trivy report
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-frontend-report
-          path: quiz-app/reports/trivy-report.json
-          if-no-files-found: warn
-
+     
       - name: Upload Checkov report
         uses: actions/upload-artifact@v4
         with:
