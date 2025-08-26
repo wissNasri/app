@@ -12,52 +12,41 @@ permissions:
 jobs:
   checkov-sarif:
     name: Analyse Checkov SARIF
-    runs-on: self-hosted # ou ubuntu-latest si possible
+    runs-on: self-hosted
 
     steps:
-      # 1. Checkout du code
+      # 1. Checkout
       - name: Checkout du code
         uses: actions/checkout@v4
 
-      # 2. Installer Checkov (il est recommandé de spécifier une version)
+      # 2. Créer dossier de rapports
+      - name: Créer le dossier de rapports
+        run: mkdir -p reports/checkov
+
+      # 3. Installer Checkov
       - name: Installer Checkov
         run: pip install checkov
 
-      # 3. Créer le dossier de rapports (cette étape n'est plus nécessaire)
-      # Checkov créera le chemin du fichier de sortie s'il n'existe pas.
-
-      # 4. Exécuter Checkov et générer le rapport SARIF
+      # 4. Run Checkov SARIF
       - name: Générer rapport Checkov SARIF
-        run: |
-          checkov -d ./kubernetes-manifest \
-            --output sarif \
-            --output-file-path reports/checkov/checkov-report.sarif
-        continue-on-error: true # Important pour que les étapes suivantes s'exécutent même si des problèmes sont trouvés
+        run: checkov -d ./kubernetes-manifest -o sarif --output-file-path reports/checkov/checkov-report.sarif
+        continue-on-error: true
 
-      # 5. Valider que le fichier SARIF a été créé (optionnel mais recommandé)
-      - name: Vérifier l'existence du rapport SARIF
-        id: check_sarif
-        run: |
-          if [ -f "reports/checkov/checkov-report.sarif" ]; then
-            echo "sarif_exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "Le rapport SARIF n'a pas été généré."
-            echo "sarif_exists=false" >> $GITHUB_OUTPUT
-          fi
+      # 5. Valider le SARIF
+      - name: Valider Checkov SARIF
+        run: jq empty reports/checkov/checkov-report.sarif || echo "SARIF peut être invalide"
 
-      # 6. Uploader le SARIF sur GitHub (uniquement si le fichier existe)
+      # 6. Upload SARIF sur GitHub
       - name: Upload Checkov SARIF
-        if: steps.check_sarif.outputs.sarif_exists == 'true'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: reports/checkov/checkov-report.sarif
-          category: checkov # Une catégorie unique pour éviter les conflits avec d'autres outils
+          category: checkov
 
-      # 7. Uploader le rapport SARIF en tant qu'artefact (utile pour le débogage)
+      # 7. Upload du rapport SARIF en artifact
       - name: Upload Checkov SARIF artifact
-        if: always() && steps.check_sarif.outputs.sarif_exists == 'true' # s'exécute toujours pour permettre le débogage
         uses: actions/upload-artifact@v4
         with:
           name: checkov-report-sarif
           path: reports/checkov/checkov-report.sarif
-          if-no-files-found: ignore # ignore si le fichier n'existe pas
+          if-no-files-found: warn
