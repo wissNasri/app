@@ -62,7 +62,9 @@ jobs:
             --source="quiz-app" \
             --exit-code 0 \
             --report-format json \
-            --report-path "quiz-app/reports/gitleaks-report.json" ||true 
+            --report-path "quiz-app/reports/gitleaks-report.json" 
+            --exit-code 0 # Important: ne pas faire échouer le pipeline
+
       # --------------------------------------------------
       - name: Run Semgrep
         run: |
