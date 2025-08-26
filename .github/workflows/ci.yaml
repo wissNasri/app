@@ -76,7 +76,7 @@ jobs:
           category: trivy
 
       - name: Upload Trivy SARIF Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: trivy-sarif
           path: quiz-app/reports/trivy/trivy-report.sarif
@@ -100,7 +100,7 @@ jobs:
           category: owasp
 
       - name: Upload OWASP SARIF Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: owasp-sarif
           path: quiz-app/reports/owasp/dependency-check-report.sarif
@@ -116,7 +116,7 @@ jobs:
           category: gitleaks
 
       - name: Upload Gitleaks SARIF Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: gitleaks-sarif
           path: quiz-app/reports/gitleaks/gitleaks-report.sarif
@@ -132,7 +132,7 @@ jobs:
           category: semgrep
 
       - name: Upload Semgrep SARIF Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: semgrep-sarif
           path: quiz-app/reports/semgrep/semgrep-report.sarif
@@ -157,7 +157,7 @@ jobs:
           category: checkov
 
       - name: Upload Checkov SARIF Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: checkov-sarif
           path: reports/checkov/checkov-report.sarif
@@ -180,7 +180,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Kubescape SARIF Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: kubescape-sarif
           path: reports/kubescape/kubescape-report.sarif
