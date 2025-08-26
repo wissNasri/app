@@ -7,20 +7,19 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: read          # pour checkout
+  security-events: write  # pour upload SARIF vers GitHub Security
+
 jobs:
   security-scan:
     runs-on: ubuntu-latest
 
     steps:
-      # ==================================================
-      # 1. Checkout du code
-      # ==================================================
       - name: Checkout
         uses: actions/checkout@v3
 
-      # ==================================================
-      # 2. Analyse avec Trivy
-      # ==================================================
+      # ===== Trivy Scan =====
       - name: Run Trivy Scan
         uses: aquasecurity/trivy-action@0.13.0
         with:
@@ -29,15 +28,13 @@ jobs:
           output: trivy-report.sarif
           ignore-unfixed: true
 
-      - name: Upload Trivy Results to GitHub Security
+      - name: Upload Trivy SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-report.sarif
           category: trivy
 
-      # ==================================================
-      # 3. Analyse avec OWASP Dependency-Check
-      # ==================================================
+      # ===== OWASP Dependency-Check =====
       - name: Run OWASP Dependency-Check
         uses: dependency-check/Dependency-Check_Action@main
         with:
@@ -45,7 +42,7 @@ jobs:
           format: "SARIF"
           out: "reports"
 
-      - name: Upload OWASP Results to GitHub Security
+      - name: Upload OWASP SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: reports/dependency-check-report.sarif
