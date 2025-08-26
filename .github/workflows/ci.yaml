@@ -101,7 +101,7 @@ jobs:
         with:
           project: "frontend-quiz-app"
           path: "quiz-app"
-          format: "JSON"
+          format: "ALL"
           out: "quiz-app/reports/owasp"
           args: >
             --enableRetired
