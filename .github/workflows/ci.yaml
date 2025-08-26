@@ -54,6 +54,32 @@ jobs:
       # ==================================================
       # 2. ANALYSE DU CODE SOURCE ET DES DÉPENDANCES
       # ==================================================
+            # --- La solution recommandée ---
+      - name: Build Docker image for frontend
+        run: docker build --cache-from quiz-app-frontend:latest -t quiz-app-frontend:latest quiz-app
+
+
+      - name: Run Trivy Scan (for console view and quality gate)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'quiz-app-frontend:latest'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Generate Trivy JSON report (for upload)
+        if: always() # S'exécute toujours !
+        run: |
+          trivy image \
+            --format json \
+            --output quiz-app/reports/trivy-report.json \
+            --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+            quiz-app-frontend:latest
+        continue-on-error: true
+
+
+
       - name: Run Gitleaks (scan de secrets )
         run: |
           ./gitleaks detect --source="quiz-app" --report-path="quiz-app/reports/gitleaks-report.json" --report-format="json" --exit-code 0
