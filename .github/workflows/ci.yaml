@@ -3,41 +3,38 @@ name: Test Kubescape SARIF
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
-  kubescape-scan:
+  scan-k8s:
     name: Analyse Kubernetes avec Kubescape
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
-      # 1. Checkout du code
       - name: Checkout du code
         uses: actions/checkout@v4
 
-      # 2. Créer le dossier de rapports
-      - name: Créer dossier pour rapport
+      - name: Créer dossier de rapports
         run: mkdir -p reports/kubescape
 
-      # 3. Scan Kubescape en SARIF
       - name: Run Kubescape SARIF
         uses: kubescape/github-action@main
         with:
           format: 'sarif'
           outputFile: 'reports/kubescape/kubescape-report.sarif'
-          scanPath: './kubernetes-manifest'
+          scanPath: ./kubernetes-manifest
         continue-on-error: true
 
-      # 4. Upload SARIF sur GitHub
       - name: Upload Kubescape SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'reports/kubescape/kubescape-report.sarif'
           category: kubescape
-
-      # 5. Upload du rapport Kubescape en tant qu'artifact
-      - name: Upload Kubescape JSON/HTML artifact (optionnel)
-        uses: actions/upload-artifact@v4
-        with:
-          name: kubescape-report
-          path: 'reports/kubescape/kubescape-report.sarif'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
