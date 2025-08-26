@@ -1,52 +1,43 @@
-name: Test Checkov SARIF
+name: Test Kubescape SARIF
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
-  checkov-sarif:
-    name: Analyse Checkov SARIF
-    runs-on: self-hosted
+  kubescape-scan:
+    name: Analyse Kubernetes avec Kubescape
+    runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout
+      # 1. Checkout du code
       - name: Checkout du code
         uses: actions/checkout@v4
 
-      # 2. Créer dossier de rapports
-      - name: Créer le dossier de rapports
-        run: mkdir -p reports/checkov
+      # 2. Créer le dossier de rapports
+      - name: Créer dossier pour rapport
+        run: mkdir -p reports/kubescape
 
-      # 3. Installer Checkov
-      - name: Installer Checkov
-        run: pip install checkov
-
-      # 4. Run Checkov SARIF
-      - name: Générer rapport Checkov SARIF
-        run: checkov -d ./kubernetes-manifest -o sarif --output-file-path reports/checkov/checkov-report.sarif
+      # 3. Scan Kubescape en SARIF
+      - name: Run Kubescape SARIF
+        uses: kubescape/github-action@main
+        with:
+          format: 'sarif'
+          outputFile: 'reports/kubescape/kubescape-report.sarif'
+          scanPath: './kubernetes-manifest'
         continue-on-error: true
 
-      # 5. Valider le SARIF
-      - name: Valider Checkov SARIF
-        run: jq empty reports/checkov/checkov-report.sarif || echo "SARIF peut être invalide"
-
-      # 6. Upload SARIF sur GitHub
-      - name: Upload Checkov SARIF
+      # 4. Upload SARIF sur GitHub
+      - name: Upload Kubescape SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: reports/checkov/checkov-report.sarif
-          category: checkov
+          sarif_file: 'reports/kubescape/kubescape-report.sarif'
+          category: kubescape
 
-      # 7. Upload du rapport SARIF en artifact
-      - name: Upload Checkov SARIF artifact
+      # 5. Upload du rapport Kubescape en tant qu'artifact
+      - name: Upload Kubescape JSON/HTML artifact (optionnel)
         uses: actions/upload-artifact@v4
         with:
-          name: checkov-report-sarif
-          path: reports/checkov/checkov-report.sarif
-          if-no-files-found: warn
+          name: kubescape-report
+          path: 'reports/kubescape/kubescape-report.sarif'
