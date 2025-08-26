@@ -77,7 +77,7 @@ jobs:
         run: |
           wget https://github.com/dependency-check/DependencyCheck/releases/download/v12.1.0/dependency-check-12.1.0-release.zip
           unzip dependency-check-12.1.0-release.zip -d dependency-check
-          chmod +x dependency-check/dependency-check.sh
+          chmod +x dependency-check/dependency-check/bin/dependency-check.sh
 
       # --- Gitleaks ---
       - name: Cache Gitleaks
@@ -124,7 +124,7 @@ jobs:
       # --- OWASP Dependency-Check console + JSON ---
       - name: Run OWASP Dependency-Check
         run: |
-          dependency-check/dependency-check.sh \
+          dependency-check/dependency-check/bin/dependency-check.sh \
             --project "frontend-quiz-app" \
             --scan "quiz-app" \
             --format ALL \
