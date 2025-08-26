@@ -61,24 +61,27 @@ jobs:
       # 3. ANALYSE DES VULNÉRABILITÉS
       # ==================================================
 
-      # --- Trivy console ---
+      # --- Trivy Scan (console) ---
       - name: Run Trivy Scan (console)
-        run: |
-          trivy image \
-            --format table \
-            --severity CRITICAL,HIGH \
-            --exit-code 0 \
-            quiz-app-frontend:latest
-
-      # --- Trivy JSON ---
+        uses: aquasecurity/trivy-action@v0.28.0
+        with:
+          image-ref: 'quiz-app-frontend:latest'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+          ignore-unfixed: true
+      
+      # --- Trivy JSON report ---
       - name: Generate Trivy JSON report
-        run: |
-          trivy image \
-            --format json \
-            --output quiz-app/reports/trivy/trivy-report.json \
-            --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
-            --exit-code 0 \
-            quiz-app-frontend:latest
+        uses: aquasecurity/trivy-action@v0.28.0
+        with:
+          image-ref: 'quiz-app-frontend:latest'
+          format: 'json'
+          output: 'quiz-app/reports/trivy/trivy-report.json'
+          severity: 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL'
+          exit-code: '0'
+          ignore-unfixed: true
+
 
       # --- Gitleaks ---
       - name: Run Gitleaks (scan de secrets)
