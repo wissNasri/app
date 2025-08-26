@@ -1,7 +1,9 @@
-name: Test Checkov SARIF
+name: Analyse de Sécurité MERN Frontend (pipeline complète)
 
 on:
   push:
+    branches: [ main ]
+  pull_request:
     branches: [ main ]
   workflow_dispatch:
 
@@ -10,43 +12,142 @@ permissions:
   security-events: write
 
 jobs:
-  checkov-sarif:
-    name: Analyse Checkov SARIF
+  scan-frontend:
+    name: Analyse du Frontend (React.js)
     runs-on: self-hosted
 
     steps:
-      # 1. Checkout
+      # ==================================================
+      # 1. Checkout & setup
+      # ==================================================
       - name: Checkout du code
         uses: actions/checkout@v4
 
-      # 2. Créer dossier de rapports
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Cache node_modules
+        uses: actions/cache@v3
+        with:
+          path: quiz-app/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('quiz-app/package-lock.json') }}
+
+      - name: Installer les dépendances du frontend
+        run: npm install
+        working-directory: quiz-app
+
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip
+
       - name: Créer le dossier de rapports
-        run: mkdir -p reports/checkov
+        run: mkdir -p quiz-app/reports/{trivy,owasp,gitleaks,semgrep,checkov,kubescape}
 
-      # 3. Installer Checkov
-      - name: Installer Checkov
-        run: pip install checkov
+      - name: Setup Gitleaks
+        run: |
+          if [ ! -f gitleaks ]; then
+            wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
+            tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
+            chmod +x gitleaks
+          fi
 
-      # 4. Run Checkov SARIF
-      - name: Générer rapport Checkov SARIF
-        run: checkov -d ./kubernetes-manifest -o sarif > reports/checkov/checkov-report.sarif
-        continue-on-error: true
+      # ==================================================
+      # 2. Build Docker
+      # ==================================================
+      - name: Build Docker image for frontend
+        run: docker build --cache-from quiz-app-frontend:latest -t quiz-app-frontend:latest quiz-app
 
-      # 5. Valider le SARIF
-      - name: Valider Checkov SARIF
-        run: jq empty reports/checkov/checkov-report.sarif || echo "SARIF peut être invalide"
+      # ==================================================
+      # 3. Analyses SARIF
+      # ==================================================
+      # (Trivy, OWASP, Gitleaks, Semgrep restent en SARIF)
+      # --- Trivy SARIF ---
+      - name: Run Trivy Scan (SARIF)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'quiz-app-frontend:latest'
+          format: 'sarif'
+          output: 'quiz-app/reports/trivy/trivy-report.sarif'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
 
-      # 6. Upload SARIF sur GitHub
-      - name: Upload Checkov SARIF
+      - name: Upload Trivy SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: reports/checkov/checkov-report.sarif
-          category: checkov
+          sarif_file: quiz-app/reports/trivy/trivy-report.sarif
+          category: trivy
 
-      # 7. Upload du rapport SARIF en artifact
-      - name: Upload Checkov SARIF artifact
+      # --- OWASP Dependency-Check SARIF ---
+      - name: Run OWASP Dependency-Check (SARIF)
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: "frontend-quiz-app"
+          path: "quiz-app"
+          format: "SARIF"
+          out: "quiz-app/reports/owasp"
+          args: "--enableRetired"
+        env:
+          JAVA_HOME: /opt/jdk
+
+      - name: Upload OWASP SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: quiz-app/reports/owasp/dependency-check-report.sarif
+          category: owasp
+
+      # --- Gitleaks SARIF ---
+      - name: Run Gitleaks (SARIF)
+        run: |
+          ./gitleaks detect --source="quiz-app" \
+            --report-path="quiz-app/reports/gitleaks/gitleaks-report.sarif" \
+            --report-format="sarif" \
+            --exit-code 0
+      - name: Upload Gitleaks SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: quiz-app/reports/gitleaks/gitleaks-report.sarif
+          category: gitleaks
+
+      # --- Semgrep SARIF ---
+      - name: Run Semgrep (SARIF)
+        run: |
+          pip install semgrep
+          semgrep scan --config "p/default" \
+            --output "quiz-app/reports/semgrep/semgrep-report.sarif" \
+            --sarif || true
+      - name: Upload Semgrep SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: quiz-app/reports/semgrep/semgrep-report.sarif
+          category: semgrep
+
+      # ==================================================
+      # 4. Analyses Kubernetes (HTML + artifact)
+      # ==================================================
+      # --- Checkov HTML ---
+      - name: Run Checkov HTML
+        run: checkov -d ./kubernetes-manifest -o html > quiz-app/reports/checkov/checkov-report.html
+        continue-on-error: true
+
+      - name: Upload Checkov HTML artifact
         uses: actions/upload-artifact@v4
         with:
-          name: checkov-report-sarif
-          path: reports/checkov/checkov-report.sarif
+          name: checkov-report-html
+          path: quiz-app/reports/checkov/checkov-report.html
+          if-no-files-found: warn
+
+      # --- Kubescape HTML ---
+      - name: Run Kubescape HTML
+        run: kubescape scan --submit false --format html --output quiz-app/reports/kubescape/kubescape-report.html ./kubernetes-manifest
+        continue-on-error: true
+
+      - name: Upload Kubescape HTML artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubescape-report-html
+          path: quiz-app/reports/kubescape/kubescape-report.html
           if-no-files-found: warn
