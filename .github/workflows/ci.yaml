@@ -113,7 +113,7 @@ jobs:
         continue-on-error: true
 
       - name: Run Kubescape (conformité des manifestes Kubernetes)
-        uses: kubescape/github-action@v3
+        uses: kubescape/github-action@main
         with:
           format: 'pretty,json'
           outputFile: 'quiz-app/reports/kubescape-report.json'
