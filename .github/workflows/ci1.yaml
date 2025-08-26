@@ -3,7 +3,7 @@ on:
   # Déclenche le workflow sur les poussées vers la branche main
   push:
     branches:
-      - main
+      - master 
 
 
 
