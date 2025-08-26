@@ -1,4 +1,4 @@
-name: Analyse de Sécurité MERN Frontend (pipeline complète)
+name: Analyse de Sécurité MERN Frontend (pipeline complète avec cache)
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
 
     steps:
       # ==================================================
-      # 1. ÉTAPES DE PRÉPARATION
+      # 1. PRÉPARATION
       # ==================================================
       - name: Checkout du code
         uses: actions/checkout@v4
@@ -43,32 +43,67 @@ jobs:
       - name: Créer le dossier de rapports
         run: mkdir -p quiz-app/reports/{trivy,owasp,gitleaks,semgrep,checkov,kubescape}
 
-      - name: Setup Gitleaks
-        run: |
-          if [ ! -f gitleaks ]; then
-            wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
-            tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
-            chmod +x gitleaks
-          fi
-
       # ==================================================
-      # 2. BUILD DOCKER
-      # ==================================================
-      - name: Build Docker image for frontend
-        run: docker build --cache-from quiz-app-frontend:latest -t quiz-app-frontend:latest quiz-app
-
-      # ==================================================
-      # 3. ANALYSE DES VULNÉRABILITÉS
+      # 2. INSTALLATION DES OUTILS AVEC CACHE
       # ==================================================
 
-      # --- Trivy (installation manuelle et scan) ---
+      # --- Trivy ---
+      - name: Cache Trivy
+        id: cache-trivy
+        uses: actions/cache@v3
+        with:
+          path: /usr/local/bin/trivy
+          key: trivy-${{ runner.os }}-v0.44.0
+
       - name: Setup Trivy
+        if: steps.cache-trivy.outputs.cache-hit != 'true'
         run: |
           wget https://github.com/aquasecurity/trivy/releases/download/v0.44.0/trivy_0.44.0_Linux-64bit.tar.gz
           tar zxvf trivy_0.44.0_Linux-64bit.tar.gz
           chmod +x trivy
           mv trivy /usr/local/bin/
 
+      # --- OWASP Dependency-Check ---
+      - name: Cache OWASP Dependency-Check
+        id: cache-owasp
+        uses: actions/cache@v3
+        with:
+          path: dependency-check
+          key: owasp-dc-8.7.0
+
+      - name: Setup OWASP Dependency-Check
+        if: steps.cache-owasp.outputs.cache-hit != 'true'
+        run: |
+          wget https://github.com/jeremylong/DependencyCheck/releases/download/v8.7.0/dependency-check-8.7.0-release.zip
+          unzip dependency-check-8.7.0-release.zip -d dependency-check
+          chmod +x dependency-check/dependency-check.sh
+
+      # --- Gitleaks ---
+      - name: Cache Gitleaks
+        id: cache-gitleaks
+        uses: actions/cache@v3
+        with:
+          path: ./gitleaks
+          key: gitleaks-8.18.2
+
+      - name: Setup Gitleaks
+        if: steps.cache-gitleaks.outputs.cache-hit != 'true'
+        run: |
+          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
+          tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
+          chmod +x gitleaks
+
+      # ==================================================
+      # 3. BUILD DOCKER
+      # ==================================================
+      - name: Build Docker image for frontend
+        run: docker build --cache-from quiz-app-frontend:latest -t quiz-app-frontend:latest quiz-app
+
+      # ==================================================
+      # 4. ANALYSE DES VULNÉRABILITÉS
+      # ==================================================
+
+      # --- Trivy Scan console et JSON ---
       - name: Run Trivy Scan (console)
         run: trivy image --severity CRITICAL,HIGH --format table --ignore-unfixed quiz-app-frontend:latest || true
 
@@ -76,24 +111,17 @@ jobs:
         run: trivy image --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --format json --output quiz-app/reports/trivy/trivy-report.json --ignore-unfixed quiz-app-frontend:latest || true
 
       # --- Gitleaks ---
-      - name: Run Gitleaks (scan de secrets)
-        run: |
-          ./gitleaks detect --source="quiz-app" --report-path="quiz-app/reports/gitleaks/gitleaks-report.json" --report-format="json" --exit-code 0
+      - name: Run Gitleaks
+        run: ./gitleaks detect --source="quiz-app" --report-path="quiz-app/reports/gitleaks/gitleaks-report.json" --report-format="json" --exit-code 0
 
       # --- Semgrep ---
-      - name: Run Semgrep (analyse statique)
+      - name: Run Semgrep
         run: |
           pip install semgrep
           semgrep scan --config "p/default" --output "quiz-app/reports/semgrep/semgrep-report.json" --json || true
 
-      # --- OWASP Dependency-Check (installation manuelle et scan) ---
-      - name: Setup OWASP Dependency-Check
-        run: |
-          wget https://github.com/jeremylong/DependencyCheck/releases/download/v8.7.0/dependency-check-8.7.0-release.zip
-          unzip dependency-check-8.7.0-release.zip -d dependency-check
-          chmod +x dependency-check/dependency-check.sh
-
-      - name: Run OWASP Dependency-Check (console + JSON)
+      # --- OWASP Dependency-Check console + JSON ---
+      - name: Run OWASP Dependency-Check
         run: |
           dependency-check/dependency-check.sh \
             --project "frontend-quiz-app" \
@@ -105,10 +133,8 @@ jobs:
           JAVA_HOME: /opt/jdk
 
       # ==================================================
-      # 4. ANALYSE DES MANIFESTES KUBERNETES
+      # 5. ANALYSE DES MANIFESTES KUBERNETES
       # ==================================================
-
-      # --- Checkov JSON + console ---
       - name: Run Checkov JSON
         run: checkov -d ./kubernetes-manifest -o json > quiz-app/reports/checkov/checkov-report.json || true
 
@@ -116,7 +142,6 @@ jobs:
         run: checkov -d ./kubernetes-manifest
         continue-on-error: true
 
-      # --- Kubescape ---
       - name: Run Kubescape
         uses: kubescape/github-action@main
         with:
@@ -126,7 +151,7 @@ jobs:
         continue-on-error: true
 
       # ==================================================
-      # 5. UPLOAD DE TOUS LES RAPPORTS
+      # 6. UPLOAD DE TOUS LES RAPPORTS
       # ==================================================
       - name: Upload Trivy report
         if: always()
