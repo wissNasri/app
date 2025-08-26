@@ -61,27 +61,19 @@ jobs:
       # 3. ANALYSE DES VULNÉRABILITÉS
       # ==================================================
 
-      # --- Trivy Scan (console) ---
-      - name: Run Trivy Scan (console)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: 'quiz-app-frontend:latest'
-          format: 'table'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '0'
-          ignore-unfixed: true
-      
-      # --- Trivy JSON report ---
-      - name: Generate Trivy JSON report
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: 'quiz-app-frontend:latest'
-          format: 'json'
-          output: 'quiz-app/reports/trivy/trivy-report.json'
-          severity: 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL'
-          exit-code: '0'
-          ignore-unfixed: true
+      # --- Trivy (installation manuelle et scan) ---
+      - name: Setup Trivy
+        run: |
+          wget https://github.com/aquasecurity/trivy/releases/download/v0.44.0/trivy_0.44.0_Linux-64bit.tar.gz
+          tar zxvf trivy_0.44.0_Linux-64bit.tar.gz
+          chmod +x trivy
+          mv trivy /usr/local/bin/
 
+      - name: Run Trivy Scan (console)
+        run: trivy image --severity CRITICAL,HIGH --format table --ignore-unfixed quiz-app-frontend:latest || true
+
+      - name: Generate Trivy JSON report
+        run: trivy image --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --format json --output quiz-app/reports/trivy/trivy-report.json --ignore-unfixed quiz-app-frontend:latest || true
 
       # --- Gitleaks ---
       - name: Run Gitleaks (scan de secrets)
@@ -94,16 +86,20 @@ jobs:
           pip install semgrep
           semgrep scan --config "p/default" --output "quiz-app/reports/semgrep/semgrep-report.json" --json || true
 
-      # --- OWASP Dependency-Check ---
-      - name: Run OWASP Dependency-Check
-        uses: dependency-check/Dependency-Check_Action@main
-        id: Depcheck
-        with:
-          project: "frontend-quiz-app"
-          path: "quiz-app"
-          format: "ALL"
-          out: "quiz-app/reports/owasp"
-          args: >
+      # --- OWASP Dependency-Check (installation manuelle et scan) ---
+      - name: Setup OWASP Dependency-Check
+        run: |
+          wget https://github.com/jeremylong/DependencyCheck/releases/download/v8.7.0/dependency-check-8.7.0-release.zip
+          unzip dependency-check-8.7.0-release.zip -d dependency-check
+          chmod +x dependency-check/dependency-check.sh
+
+      - name: Run OWASP Dependency-Check (console + JSON)
+        run: |
+          dependency-check/dependency-check.sh \
+            --project "frontend-quiz-app" \
+            --scan "quiz-app" \
+            --format ALL \
+            --out "quiz-app/reports/owasp" \
             --enableRetired
         env:
           JAVA_HOME: /opt/jdk
@@ -112,12 +108,9 @@ jobs:
       # 4. ANALYSE DES MANIFESTES KUBERNETES
       # ==================================================
 
-      # --- Checkov ---
+      # --- Checkov JSON + console ---
       - name: Run Checkov JSON
-        run: checkov -d ./kubernetes-manifest -o json > quiz-app/reports/checkov/checkov-report.json
-
-        continue-on-error: true
-
+        run: checkov -d ./kubernetes-manifest -o json > quiz-app/reports/checkov/checkov-report.json || true
 
       - name: Run Checkov Console
         run: checkov -d ./kubernetes-manifest
