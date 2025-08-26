@@ -1,9 +1,7 @@
-name: Analyse de Sécurité MERN Frontend (pipeline complète)
+name: Test Checkov SARIF
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
     branches: [ main ]
   workflow_dispatch:
 
@@ -12,142 +10,54 @@ permissions:
   security-events: write
 
 jobs:
-  scan-frontend:
-    name: Analyse du Frontend (React.js)
-    runs-on: self-hosted
+  checkov-sarif:
+    name: Analyse Checkov SARIF
+    runs-on: self-hosted # ou ubuntu-latest si possible
 
     steps:
-      # ==================================================
-      # 1. Checkout & setup
-      # ==================================================
+      # 1. Checkout du code
       - name: Checkout du code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
+      # 2. Installer Checkov (il est recommandé de spécifier une version)
+      - name: Installer Checkov
+        run: pip install checkov
 
-      - name: Cache node_modules
-        uses: actions/cache@v3
-        with:
-          path: quiz-app/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('quiz-app/package-lock.json') }}
+      # 3. Créer le dossier de rapports (cette étape n'est plus nécessaire)
+      # Checkov créera le chemin du fichier de sortie s'il n'existe pas.
 
-      - name: Installer les dépendances du frontend
-        run: npm install
-        working-directory: quiz-app
-
-      - name: Cache pip
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip
-
-      - name: Créer le dossier de rapports
-        run: mkdir -p quiz-app/reports/{trivy,owasp,gitleaks,semgrep,checkov,kubescape}
-
-      - name: Setup Gitleaks
+      # 4. Exécuter Checkov et générer le rapport SARIF
+      - name: Générer rapport Checkov SARIF
         run: |
-          if [ ! -f gitleaks ]; then
-            wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
-            tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
-            chmod +x gitleaks
+          checkov -d ./kubernetes-manifest \
+            --output sarif \
+            --output-file-path reports/checkov/checkov-report.sarif
+        continue-on-error: true # Important pour que les étapes suivantes s'exécutent même si des problèmes sont trouvés
+
+      # 5. Valider que le fichier SARIF a été créé (optionnel mais recommandé)
+      - name: Vérifier l'existence du rapport SARIF
+        id: check_sarif
+        run: |
+          if [ -f "reports/checkov/checkov-report.sarif" ]; then
+            echo "sarif_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Le rapport SARIF n'a pas été généré."
+            echo "sarif_exists=false" >> $GITHUB_OUTPUT
           fi
 
-      # ==================================================
-      # 2. Build Docker
-      # ==================================================
-      - name: Build Docker image for frontend
-        run: docker build --cache-from quiz-app-frontend:latest -t quiz-app-frontend:latest quiz-app
-
-      # ==================================================
-      # 3. Analyses SARIF
-      # ==================================================
-      # (Trivy, OWASP, Gitleaks, Semgrep restent en SARIF)
-      # --- Trivy SARIF ---
-      - name: Run Trivy Scan (SARIF)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: 'quiz-app-frontend:latest'
-          format: 'sarif'
-          output: 'quiz-app/reports/trivy/trivy-report.sarif'
-          severity: 'CRITICAL,HIGH'
-          ignore-unfixed: true
-
-      - name: Upload Trivy SARIF
+      # 6. Uploader le SARIF sur GitHub (uniquement si le fichier existe)
+      - name: Upload Checkov SARIF
+        if: steps.check_sarif.outputs.sarif_exists == 'true'
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: quiz-app/reports/trivy/trivy-report.sarif
-          category: trivy
+          sarif_file: reports/checkov/checkov-report.sarif
+          category: checkov # Une catégorie unique pour éviter les conflits avec d'autres outils
 
-      # --- OWASP Dependency-Check SARIF ---
-      - name: Run OWASP Dependency-Check (SARIF)
-        uses: dependency-check/Dependency-Check_Action@main
-        with:
-          project: "frontend-quiz-app"
-          path: "quiz-app"
-          format: "SARIF"
-          out: "quiz-app/reports/owasp"
-          args: "--enableRetired"
-        env:
-          JAVA_HOME: /opt/jdk
-
-      - name: Upload OWASP SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: quiz-app/reports/owasp/dependency-check-report.sarif
-          category: owasp
-
-      # --- Gitleaks SARIF ---
-      - name: Run Gitleaks (SARIF)
-        run: |
-          ./gitleaks detect --source="quiz-app" \
-            --report-path="quiz-app/reports/gitleaks/gitleaks-report.sarif" \
-            --report-format="sarif" \
-            --exit-code 0
-      - name: Upload Gitleaks SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: quiz-app/reports/gitleaks/gitleaks-report.sarif
-          category: gitleaks
-
-      # --- Semgrep SARIF ---
-      - name: Run Semgrep (SARIF)
-        run: |
-          pip install semgrep
-          semgrep scan --config "p/default" \
-            --output "quiz-app/reports/semgrep/semgrep-report.sarif" \
-            --sarif || true
-      - name: Upload Semgrep SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: quiz-app/reports/semgrep/semgrep-report.sarif
-          category: semgrep
-
-      # ==================================================
-      # 4. Analyses Kubernetes (HTML + artifact)
-      # ==================================================
-      # --- Checkov HTML ---
-      - name: Run Checkov HTML
-        run: checkov -d ./kubernetes-manifest -o html > quiz-app/reports/checkov/checkov-report.html
-        continue-on-error: true
-
-      - name: Upload Checkov HTML artifact
+      # 7. Uploader le rapport SARIF en tant qu'artefact (utile pour le débogage)
+      - name: Upload Checkov SARIF artifact
+        if: always() && steps.check_sarif.outputs.sarif_exists == 'true' # s'exécute toujours pour permettre le débogage
         uses: actions/upload-artifact@v4
         with:
-          name: checkov-report-html
-          path: quiz-app/reports/checkov/checkov-report.html
-          if-no-files-found: warn
-
-      # --- Kubescape HTML ---
-      - name: Run Kubescape HTML
-        run: kubescape scan --submit false --format html --output quiz-app/reports/kubescape/kubescape-report.html ./kubernetes-manifest
-        continue-on-error: true
-
-      - name: Upload Kubescape HTML artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: kubescape-report-html
-          path: quiz-app/reports/kubescape/kubescape-report.html
-          if-no-files-found: warn
+          name: checkov-report-sarif
+          path: reports/checkov/checkov-report.sarif
+          if-no-files-found: ignore # ignore si le fichier n'existe pas
