@@ -91,15 +91,14 @@ jobs:
           exit-code: '1' # Fait échouer le build si des vulnérabilités CRITICAL ou HIGH sont trouvées
           ignore-unfixed: true
 
-      - name: Generate Trivy JSON report (for upload)
-        if: always() # S'exécute toujours pour générer le rapport, même si l'étape précédente a échoué
-        run: |
-          trivy image \
-            --format json \
-            --output quiz-app/reports/trivy-report.json \
-            --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
-            quiz-app-frontend:latest
-        continue-on-error: true
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'quiz-app-frontend:latest'
+          format: 'json'
+          output: 'quiz-app/reports/trivy-report.json'
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
 
       # ==================================================
       # 4. ANALYSE DES MANIFESTES KUBERNETES
