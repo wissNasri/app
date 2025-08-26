@@ -48,7 +48,7 @@ jobs:
 
       # --------------------------------------------------
       - name: Run Kubescape for Kubernetes manifests
-        uses: kubescape/github-action@v3
+        uses: kubescape/github-action@main
         with:
           # Spécifie le format du rapport de sortie
           format: json
