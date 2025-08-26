@@ -13,51 +13,35 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # --------------------------------------------------
+      # ==================================================
+      # 1. ÉTAPES DE PRÉPARATION
+      # ==================================================
       - name: Checkout du code
         uses: actions/checkout@v4
 
-      # --------------------------------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      # --------------------------------------------------
       - name: Cache node_modules
         uses: actions/cache@v3
         with:
           path: quiz-app/node_modules
           key: ${{ runner.os }}-node-${{ hashFiles('quiz-app/package-lock.json') }}
 
-      # --------------------------------------------------
       - name: Installer les dépendances du frontend
         run: npm install
         working-directory: quiz-app
 
-      # --------------------------------------------------
       - name: Cache pip
         uses: actions/cache@v3
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip
 
-      # --------------------------------------------------
       - name: Créer le dossier de rapports
         run: mkdir -p quiz-app/reports
-
-      # --------------------------------------------------
-      - name: Run Kubescape for Kubernetes manifests
-        uses: kubescape/github-action@main
-        with:
-          # Spécifie le format du rapport de sortie
-          format: json
-          formatVersion: v2
-          outputFile: quiz-app/reports/kubescape-report.json
-          
-          # Cible le dossier contenant vos fichiers YAML Kubernetes
-          scanPath: ./kubernetes-manifest
-        continue-on-error: true # Continue même si Kubescape trouve des problèmes
 
       - name: Setup Gitleaks
         run: |
@@ -67,62 +51,82 @@ jobs:
             chmod +x gitleaks
           fi
 
-      # --------------------------------------------------
-      - name: Run Gitleaks
-        run: ./gitleaks detect \
-            --verbose \
-            --source="quiz-app" \
-            --exit-code 0 \
-            --report-format json \
-            --report-path "quiz-app/reports/gitleaks-report.json" 
-            --exit-code 0 # Important: ne pas faire échouer le pipeline
+      # ==================================================
+      # 2. ANALYSE DU CODE SOURCE ET DES DÉPENDANCES
+      # ==================================================
+      - name: Run Gitleaks (scan de secrets )
+        run: |
+          # Affiche les résultats dans la console ET sauvegarde le rapport JSON
+          ./gitleaks detect --source="quiz-app" --report-path="quiz-app/reports/gitleaks-report.json" --report-format="json" --exit-code 0
+        # J'ai corrigé la duplication de --exit-code 0.
 
-      # --------------------------------------------------
-      - name: Run Semgrep
+      - name: Run Semgrep (analyse statique du code)
         run: |
           pip install semgrep
-          semgrep scan --config "p/default" \
-            --output "quiz-app/reports/semgrep-report.json" \
-            --json || true
-      # --------------------------------------------------
-      - name: Lancer l'analyse des dépendances du frontend (OWASP)
+          # Affiche les résultats dans la console (par défaut) ET sauvegarde le rapport JSON
+          semgrep scan --config "p/default" --output "quiz-app/reports/semgrep-report.json" --json || true
+
+      - name: Run OWASP Dependency-Check (vulnérabilités des dépendances)
         uses: dependency-check/Dependency-Check_Action@main
         id: Depcheck
         with:
           project: "frontend-quiz-app"
           path: "quiz-app"
-          format: "JSON"
+          # Sauvegarde en JSON et HTML (le HTML est un beau rapport visuel)
+          format: "ALL" 
           out: "quiz-app/reports"
           args: >
             --enableRetired
         env:
           JAVA_HOME: /opt/jdk
 
-      # --------------------------------------------------
+      # ==================================================
+      # 3. ANALYSE DE L'IMAGE DOCKER
+      # ==================================================
       - name: Build Docker image for frontend
         run: docker build --cache-from quiz-app-frontend:latest -t quiz-app-frontend:latest quiz-app
 
-      # --------------------------------------------------
-      - name: Scan Docker image with Trivy
+      - name: Run Trivy (vulnérabilités de l'image Docker)
         uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: 'quiz-app-frontend:latest'
-          format: 'json'
-          output: 'quiz-app/reports/trivy-report.json'
+          # MODIFIÉ : Affiche un tableau dans la console ET sauvegarde en JSON
+          format: 'table'
+          output: 'trivy-results.txt' # Sortie console sauvegardée dans un fichier
+          template: '@/contrib/html.tpl' # Utilise un template pour un beau rapport HTML
+          output: 'quiz-app/reports/trivy-report.html'
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
+        # Pour avoir le JSON en plus, nous devons lancer une deuxième fois (Trivy ne gère pas multi-formats facilement)
+      - name: Generate Trivy JSON report
+        run: trivy image --format json --output quiz-app/reports/trivy-report.json quiz-app-frontend:latest
+        continue-on-error: true
 
-      # --------------------------------------------------
-      - name: Run Checkov
+      # ==================================================
+      # 4. ANALYSE DES MANIFESTES KUBERNETES
+      # ==================================================
+      - name: Run Checkov (sécurité des manifestes IaC)
         uses: bridgecrewio/checkov-action@v12
         with:
           directory: ./kubernetes-manifest
-          output_format: json,cli
-          output_file_path: quiz-app/reports/checkov-report.json,console
+          # MODIFIÉ : Affiche la sortie CLI (console) ET sauvegarde en JSON
+          output_format: cli,json
+          output_file_path: console,quiz-app/reports/checkov-report.json
         continue-on-error: true
 
-      # --------------------------------------------------
-      # Upload des rapports
+      # --- Kubescape placé juste après Checkov, comme demandé ---
+      - name: Run Kubescape (conformité des manifestes Kubernetes)
+        uses: kubescape/github-action@v3
+        with:
+          # MODIFIÉ : Affiche un résumé dans la console ET sauvegarde en JSON
+          format: 'pretty,json'
+          outputFile: 'quiz-app/reports/kubescape-report.json'
+          scanPath: ./kubernetes-manifest
+        continue-on-error: true
+
+      # ==================================================
+      # 5. UPLOAD DE TOUS LES RAPPORTS
+      # ==================================================
       - name: Upload Gitleaks report
         uses: actions/upload-artifact@v4
         with:
@@ -137,18 +141,20 @@ jobs:
           path: quiz-app/reports/semgrep-report.json
           if-no-files-found: warn
 
-      - name: Upload OWASP report
+      - name: Upload OWASP reports
         uses: actions/upload-artifact@v4
         with:
-          name: owasp-frontend-report
-          path: quiz-app/reports/dependency-check-report.json
+          name: owasp-frontend-reports
+          path: quiz-app/reports/dependency-check-*.json
           if-no-files-found: warn
 
-      - name: Upload Trivy report
+      - name: Upload Trivy reports
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-frontend-report
-          path: quiz-app/reports/trivy-report.json
+          name: trivy-frontend-reports
+          path: |
+            quiz-app/reports/trivy-report.json
+            quiz-app/reports/trivy-report.html
           if-no-files-found: warn
 
       - name: Upload Checkov report
@@ -156,4 +162,12 @@ jobs:
         with:
           name: checkov-frontend-report
           path: quiz-app/reports/checkov-report.json
+          if-no-files-found: warn
+
+      # --- Upload du rapport Kubescape ---
+      - name: Upload Kubescape report
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubescape-frontend-report
+          path: quiz-app/reports/kubescape-report.json
           if-no-files-found: warn
