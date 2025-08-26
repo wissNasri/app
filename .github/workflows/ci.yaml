@@ -1,4 +1,4 @@
-name: Analyse de Sécurité MERN Frontend (SARIF + HTML compact)
+name: Analyse de Sécurité MERN Frontend (pipeline SARIF uniquement)
 
 on:
   push:
@@ -8,8 +8,6 @@ on:
   workflow_dispatch:
 
 permissions:
-
-
   contents: read
   security-events: write
 
@@ -20,7 +18,7 @@ jobs:
 
     steps:
       # ==================================================
-      # 1. Checkout & setup
+      # 1. Checkout & Setup
       # ==================================================
       - name: Checkout du code
         uses: actions/checkout@v4
@@ -58,23 +56,95 @@ jobs:
         run: docker build -t quiz-app-frontend:latest quiz-app
 
       # ==================================================
-      # 3. Analyses de vulnérabilités (SARIF + HTML)
+      # 3. Analyses de vulnérabilités (SARIF uniquement)
       # ==================================================
-      # Trivy
-      - name: Trivy Scan SARIF + HTML
-        run: |
-          trivy image -f sarif -o quiz-app/reports/trivy/trivy-report.sarif quiz-app-frontend:latest
-          trivy image -f html -o quiz-app/reports/trivy/trivy-report.html quiz-app-frontend:latest
+
+      ## Trivy
+      - name: Run Trivy Scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'quiz-app-frontend:latest'
+          format: 'sarif'
+          output: 'quiz-app/reports/trivy/trivy-report.sarif'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
 
       - name: Upload Trivy SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: quiz-app/reports/trivy/trivy-report.sarif
           category: trivy
-      - name: Upload Trivy HTML Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-html-report
-          path: quiz-app/reports/trivy/trivy-report.html
 
-      
+      ## OWASP Dependency-Check
+      - name: Run OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: "frontend-quiz-app"
+          path: "quiz-app"
+          format: "SARIF"
+          out: "quiz-app/reports/owasp"
+          args: "--enableRetired"
+        env:
+          JAVA_HOME: /opt/jdk
+
+      - name: Upload OWASP SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: quiz-app/reports/owasp/dependency-check-report.sarif
+          category: owasp
+
+      ## Gitleaks
+      - name: Run Gitleaks
+        run: ./gitleaks detect --source="quiz-app" --report-path="quiz-app/reports/gitleaks/gitleaks-report.sarif" --report-format="sarif" --exit-code 0
+
+      - name: Upload Gitleaks SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: quiz-app/reports/gitleaks/gitleaks-report.sarif
+          category: gitleaks
+
+      ## Semgrep
+      - name: Run Semgrep
+        run: semgrep scan --config "p/default" --output "quiz-app/reports/semgrep/semgrep-report.sarif" --sarif || true
+
+      - name: Upload Semgrep SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: quiz-app/reports/semgrep/semgrep-report.sarif
+          category: semgrep
+
+      # ==================================================
+      # 4. Analyse Kubernetes (SARIF uniquement)
+      # ==================================================
+
+      ## Installer Checkov
+      - name: Installer Checkov
+        run: pip install checkov
+
+      ## Checkov
+      - name: Run Checkov SARIF
+        run: checkov -d ./kubernetes-manifest -o sarif --output-file-path reports/checkov/checkov-report.sarif
+        continue-on-error: true
+
+      - name: Upload Checkov SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reports/checkov/checkov-report.sarif
+          category: checkov
+
+      ## Kubescape
+      - name: Run Kubescape SARIF
+        uses: kubescape/github-action@main
+        with:
+          format: 'sarif'
+          outputFile: 'reports/kubescape/kubescape-report.sarif'
+          scanPath: ./kubernetes-manifest
+        continue-on-error: true
+
+      - name: Upload Kubescape SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'reports/kubescape/kubescape-report.sarif'
+          category: kubescape
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
