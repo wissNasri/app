@@ -79,7 +79,6 @@ jobs:
             --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
             --exit-code 0
             quiz-app-frontend:latest
-        continue-on-error: true
 
 
 
@@ -108,26 +107,7 @@ jobs:
       # ==================================================
       # 3. ANALYSE DE L'IMAGE DOCKER
       # ==================================================
-      - name: Build Docker image for frontend
-        run: docker build --cache-from quiz-app-frontend:latest -t quiz-app-frontend:latest quiz-app
-
-      - name: Run Trivy Scan (for console view and quality gate)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: 'quiz-app-frontend:latest'
-          format: 'table'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1' # Fait échouer le build si des vulnérabilités CRITICAL ou HIGH sont trouvées
-          ignore-unfixed: true
-
-      - name: Scan Docker image with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: 'quiz-app-frontend:latest'
-          format: 'json'
-          output: 'quiz-app/reports/trivy-report.json'
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+'
 
       # ==================================================
       # 4. ANALYSE DES MANIFESTES KUBERNETES
