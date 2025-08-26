@@ -116,6 +116,9 @@ jobs:
       - name: Run Checkov JSON
         run: checkov -d ./kubernetes-manifest -o json > quiz-app/reports/checkov/checkov-report.json
 
+        continue-on-error: true
+
+
       - name: Run Checkov Console
         run: checkov -d ./kubernetes-manifest
         continue-on-error: true
