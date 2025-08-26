@@ -63,7 +63,7 @@ jobs:
           wget https://github.com/aquasecurity/trivy/releases/download/v0.44.0/trivy_0.44.0_Linux-64bit.tar.gz
           tar zxvf trivy_0.44.0_Linux-64bit.tar.gz
           chmod +x trivy
-          mv trivy /usr/local/bin/
+          sudo mv trivy /usr/local/bin/
 
       # --- OWASP Dependency-Check ---
       - name: Cache OWASP Dependency-Check
