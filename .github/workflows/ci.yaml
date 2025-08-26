@@ -47,6 +47,18 @@ jobs:
         run: mkdir -p quiz-app/reports
 
       # --------------------------------------------------
+      - name: Run Kubescape for Kubernetes manifests
+        uses: kubescape/github-action@v3
+        with:
+          # Spécifie le format du rapport de sortie
+          format: json
+          formatVersion: v2
+          outputFile: quiz-app/reports/kubescape-report.json
+          
+          # Cible le dossier contenant vos fichiers YAML Kubernetes
+          scanPath: ./kubernetes-manifest
+        continue-on-error: true # Continue même si Kubescape trouve des problèmes
+
       - name: Setup Gitleaks
         run: |
           if [ ! -f gitleaks ]; then
