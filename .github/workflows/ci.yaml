@@ -6,18 +6,13 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
-
+  
 jobs:
   scan-frontend:
     name: Analyse du Frontend (React.js)
     runs-on: self-hosted
 
     steps:
-      # --------------------------------------------------
-      - name: Nettoyer workspace précédent
-        run: |
-          echo "Nettoyage du workspace pour éviter les problèmes de permissions..."
-          sudo rm -rf $GITHUB_WORKSPACE/*
       # --------------------------------------------------
       - name: Checkout du code
         uses: actions/checkout@v4
@@ -29,26 +24,46 @@ jobs:
           node-version: '18'
 
       # --------------------------------------------------
+      - name: Cache node_modules
+        uses: actions/cache@v3
+        with:
+          path: quiz-app/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('quiz-app/package-lock.json') }}
+
+      # --------------------------------------------------
       - name: Installer les dépendances du frontend
         run: npm install
         working-directory: quiz-app
+
+      # --------------------------------------------------
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip
 
       # --------------------------------------------------
       - name: Créer le dossier de rapports
         run: mkdir -p quiz-app/reports
 
       # --------------------------------------------------
-      - name: Run Gitleaks
+      - name: Setup Gitleaks
         run: |
-          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
-          tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
-          chmod +x gitleaks
-          ./gitleaks detect \
+          if [ ! -f gitleaks ]; then
+            wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
+            tar -xzf gitleaks_8.18.2_linux_x64.tar.gz
+            chmod +x gitleaks
+          fi
+
+      # --------------------------------------------------
+      - name: Run Gitleaks
+        run: ./gitleaks detect \
             --verbose \
             --source="quiz-app" \
             --exit-code 0 \
             --report-format json \
             --report-path "quiz-app/reports/gitleaks-report.json"
+
       # --------------------------------------------------
       - name: Run Semgrep
         run: |
@@ -72,7 +87,7 @@ jobs:
 
       # --------------------------------------------------
       - name: Build Docker image for frontend
-        run: docker build -t quiz-app-frontend:latest quiz-app
+        run: docker build --cache-from quiz-app-frontend:latest -t quiz-app-frontend:latest quiz-app
 
       # --------------------------------------------------
       - name: Scan Docker image with Trivy
