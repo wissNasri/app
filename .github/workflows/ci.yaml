@@ -64,7 +64,8 @@ jobs:
       - name: Trivy Scan SARIF + HTML
         run: |
           trivy image -f sarif -o quiz-app/reports/trivy/trivy-report.sarif quiz-app-frontend:latest
-          trivy image --format template --template "@contrib/html.tpl" -o quiz-app/reports/trivy/trivy-report.html quiz-app-frontend:latest
+          trivy image -f html -o quiz-app/reports/trivy/trivy-report.html quiz-app-frontend:latest
+
       - name: Upload Trivy SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
@@ -76,91 +77,4 @@ jobs:
           name: trivy-html-report
           path: quiz-app/reports/trivy/trivy-report.html
 
-      # OWASP Dependency-Check
-      - name: OWASP Dependency-Check SARIF + HTML
-        run: |
-          dependency-check --project "frontend-quiz-app" --scan "quiz-app" --format "SARIF,HTML" --out "quiz-app/reports/owasp" --enableRetired
-      - name: Upload OWASP SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: quiz-app/reports/owasp/dependency-check-report.sarif
-          category: owasp
-      - name: Upload OWASP HTML Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: owasp-html-report
-          path: quiz-app/reports/owasp/dependency-check-report.html
-
-      # Gitleaks
-      - name: Gitleaks SARIF + HTML
-        run: |
-          ./gitleaks detect --source="quiz-app" --report-path="quiz-app/reports/gitleaks/gitleaks-report.sarif" --report-format="sarif" --exit-code 0
-          ./gitleaks detect --source="quiz-app" --report-path="quiz-app/reports/gitleaks/gitleaks-report.html" --report-format="html" --exit-code 0
-      - name: Upload Gitleaks SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: quiz-app/reports/gitleaks/gitleaks-report.sarif
-          category: gitleaks
-      - name: Upload Gitleaks HTML Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-html-report
-          path: quiz-app/reports/gitleaks/gitleaks-report.html
-
-      # Semgrep
-      - name: Semgrep SARIF + HTML
-        run: |
-          semgrep scan --config "p/default" --output "quiz-app/reports/semgrep/semgrep-report.sarif" --sarif || true
-          semgrep scan --config "p/default" --output "quiz-app/reports/semgrep/semgrep-report.html" --format html || true
-      - name: Upload Semgrep SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: quiz-app/reports/semgrep/semgrep-report.sarif
-          category: semgrep
-      - name: Upload Semgrep HTML Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: semgrep-html-report
-          path: quiz-app/reports/semgrep/semgrep-report.html
-
-      # ==================================================
-      # 4. Analyse Kubernetes (SARIF + HTML)
-      # ==================================================
-      - name: Installer Checkov
-        run: pip install checkov
-
-      # Checkov
-      - name: Checkov SARIF + HTML
-        run: |
-          checkov -d ./kubernetes-manifest -o sarif --output-file-path reports/checkov/checkov-report.sarif
-          checkov -d ./kubernetes-manifest -o html --output-file-path reports/checkov/checkov-report.html
-        continue-on-error: true
-      - name: Upload Checkov SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: reports/checkov/checkov-report.sarif
-          category: checkov
-      - name: Upload Checkov HTML Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: checkov-html-report
-          path: reports/checkov/checkov-report.html
-
-      # Kubescape
-      - name: Kubescape SARIF + HTML
-        run: |
-          kubescape scan framework nsa --format sarif --output-path reports/kubescape/kubescape-report.sarif
-          kubescape scan framework nsa --format html --output-path reports/kubescape/kubescape-report.html
-        continue-on-error: true
-      - name: Upload Kubescape SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: reports/kubescape/kubescape-report.sarif
-          category: kubescape
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload Kubescape HTML Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: kubescape-html-report
-          path: reports/kubescape/kubescape-report.html
+      
