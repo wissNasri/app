@@ -60,6 +60,7 @@ jobs:
       # ==================================================
 
       ## Trivy
+      
       - name: Run Trivy Scan SARIF
         uses: aquasecurity/trivy-action@0.28.0
         with:
