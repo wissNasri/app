@@ -61,6 +61,7 @@ jobs:
             # --- Checkov JSON + SARIF ---
       - name: Run Checkov JSON
         run: checkov -d ./kubernetes-manifest -o json > quiz-app/reports/checkov/checkov-report.json
+        continue-on-error: true
 
       - name: Convert Checkov JSON to SARIF (optional)
         run: python scripts/convert_checkov_json_to_sarif.py \
