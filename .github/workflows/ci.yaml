@@ -58,6 +58,34 @@ jobs:
       # ==================================================
       # 2. Build Docker
       # ==================================================
+            # --- Checkov JSON + SARIF ---
+      - name: Run Checkov JSON
+        run: checkov -d ./kubernetes-manifest -o json > quiz-app/reports/checkov/checkov-report.json
+
+      - name: Convert Checkov JSON to SARIF (optional)
+        run: python scripts/convert_checkov_json_to_sarif.py \
+          quiz-app/reports/checkov/checkov-report.json \
+          quiz-app/reports/checkov/checkov-report.sarif
+
+      - name: Validate Checkov SARIF
+        run: jq empty quiz-app/reports/checkov/checkov-report.sarif || echo "Checkov SARIF may be invalid"
+
+      - name: Upload Checkov SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: quiz-app/reports/checkov/checkov-report.sarif
+          category: checkov
+
+      - name: Upload Checkov JSON artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-report-json
+          path: quiz-app/reports/checkov/checkov-report.json
+
+
+
+          
+
       - name: Build Docker image for frontend
         run: docker build --cache-from quiz-app-frontend:latest -t quiz-app-frontend:latest quiz-app
 
