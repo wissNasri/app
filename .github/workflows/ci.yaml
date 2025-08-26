@@ -77,7 +77,7 @@ jobs:
             --format json \
             --output quiz-app/reports/trivy-report.json \
             --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
-            --exit-code 
+            --exit-code 0
             quiz-app-frontend:latest
         continue-on-error: true
 
