@@ -1,4 +1,4 @@
-name: Semgrep Scan with semgrep-action
+name: Semgrep Scan with JSON Report
 
 on:
   pull_request:
@@ -10,17 +10,29 @@ on:
 
 jobs:
   semgrep:
-    name: Run Semgrep Analysis
+    name: Run Semgrep Analysis and Generate JSON Report
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ./quiz-app
+
+    permissions:
+      contents: read # Required to checkout the repository
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Semgrep Analysis
+      - name: Run Semgrep Analysis and generate JSON report
         uses: semgrep/semgrep-action@v1
         with:
-          directory: ./quiz-app
-          config: p/react,p/javascript
+          config: |
+            p/react
+            p/javascript
+          args: --json > semgrep-results.json # Pass --json to semgrep CLI and redirect output
+
+      - name: Upload Semgrep JSON report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-json-report
+          path: semgrep-results.json
