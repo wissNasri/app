@@ -1,25 +1,24 @@
-name: Semgrep Frontend Scan
+name: Semgrep Scan
 
 on:
-  pull_request: {}
-  workflow_dispatch: {}
+  pull_request: {}          # Déclenche à chaque PR
+  workflow_dispatch: {}     # Déclenchement manuel
   push:
     branches:
-      - "main"
+      - "main"             # Déclenche sur push vers main
 
 jobs:
   semgrep_scan:
+    name: Semgrep Analysis
     runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep # Docker avec Semgrep pré-installé
 
     steps:
+      # 1️⃣ Checkout du code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Exécuter Semgrep via args
-      - name: Semgrep Scan JSON
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: auto
-          args: --json --output semgrep-report.json ./quiz-app/src
-
-
+      # 2️⃣ Exécuter Semgrep pour scanner le code
+      - name: Perform Semgrep Analysis
+        run: semgrep scan --config auto ./src
