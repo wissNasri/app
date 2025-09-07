@@ -1,11 +1,11 @@
 name: Semgrep Scan
 
 on:
-  pull_request: {}          # Déclenche à chaque PR
-  workflow_dispatch: {}     # Déclenchement manuel
+  pull_request: {}
+  workflow_dispatch: {}
   push:
     branches:
-      - "main"             # Déclenche sur push vers main
+      - "main"
 
 jobs:
   semgrep_scan:
@@ -19,6 +19,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Exécuter Semgrep pour scanner le code
+      # 2️⃣ Exécuter Semgrep et générer un rapport JSON
       - name: Perform Semgrep Analysis
-        run: semgrep scan --config auto ./quiz-app
+        run: semgrep scan --config auto --json --output semgrep-report.json ./quiz-app/src
+
+      # 3️⃣ Upload du rapport JSON comme artefact
+      - name: Upload JSON report
+        uses: actions/upload-artifact@v3
+        with:
+          name: semgrep-frontend-report
+          path: semgrep-report.json
