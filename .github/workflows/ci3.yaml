@@ -1,1 +1,39 @@
+name: Semgrep Frontend Scan
 
+on:
+  pull_request: {}           # Déclenche à chaque PR
+  workflow_dispatch: {}      # Permet le déclenchement manuel
+  push:
+    branches:
+      - "main"              # Déclenche sur push vers main
+
+jobs:
+  semgrep_scan:
+    name: Semgrep Frontend Analysis
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      # 1️⃣ Checkout du code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Installer Semgrep via l’action Marketplace
+      - name: Semgrep Scan
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: auto                  # Utilise les règles officielles Semgrep pour JS/React
+          format: json                  # Format JSON pour le rapport
+          output: semgrep-report.json   # Fichier de sortie
+          # fail_on_error: true         # Décommente si tu veux que le job échoue sur findings
+          path: ./quiz-app/src          # Analyse uniquement le frontend
+
+      # 3️⃣ Sauvegarder le rapport JSON comme artefact
+      - name: Upload JSON report
+        uses: actions/upload-artifact@v3
+        with:
+          name: semgrep-frontend-report
+          path: semgrep-report.json
