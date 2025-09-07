@@ -21,4 +21,4 @@ jobs:
 
       # 2️⃣ Exécuter Semgrep pour scanner le code
       - name: Perform Semgrep Analysis
-        run: semgrep scan --config auto ./src
+        run: semgrep scan --config auto ./quiz-app
