@@ -1,31 +1,26 @@
-name: Semgrep Scan
+name: Semgrep Scan with semgrep-action
 
 on:
-  pull_request: {}
+  pull_request:
+    branches: [ "master" ]
   workflow_dispatch: {}
   push:
     branches:
       - "main"
 
 jobs:
-  semgrep_scan:
-    name: Semgrep Analysis
+  semgrep:
+    name: Run Semgrep Analysis
     runs-on: ubuntu-latest
-    container:
-      image: returntocorp/semgrep # Docker avec Semgrep pré-installé
-
+    defaults:
+      run:
+        working-directory: ./quiz-app
     steps:
-      # 1️⃣ Checkout du code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Exécuter Semgrep et générer un rapport JSON
-      - name: Perform Semgrep Analysis
-        run: semgrep scan --config auto --json --output semgrep-report.json ./quiz-app/src
-
-      # 3️⃣ Upload du rapport JSON comme artefact
-      - name: Upload JSON report
-        uses: actions/upload-artifact@v4
+      - name: Run Semgrep Analysis
+        uses: semgrep/semgrep-action@v1
         with:
-          name: semgrep-frontend-report
-          path: semgrep-report.json
+          directory: ./quiz-app
+          config: p/react,p/javascript
