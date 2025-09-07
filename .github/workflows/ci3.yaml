@@ -1,38 +1,37 @@
-name: Semgrep Scan with JSON Report
+name: Gitleaks - frontend scan (Docker)
 
 on:
-  pull_request:
-    branches: [ "master" ]
+  pull_request: {}
   workflow_dispatch: {}
   push:
-    branches:
-      - "main"
+    branches: ["main"]
 
 jobs:
-  semgrep:
-    name: Run Semgrep Analysis and Generate JSON Report
+  gitleaks_scan:
+    name: Gitleaks Frontend Scan
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./quiz-app
 
-    permissions:
-      contents: read # Required to checkout the repository
+    # Exécute tout le job dans l'image officielle Gitleaks
+    container:
+      image: ghcr.io/gitleaks/gitleaks:latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Run Semgrep Analysis and generate JSON report
-        uses: semgrep/semgrep-action@v1
         with:
-          config: |
-            p/react
-            p/javascript
-          args: --json > semgrep-results.json # Pass --json to semgrep CLI and redirect output
+          fetch-depth: 0
 
-      - name: Upload Semgrep JSON report as artifact
+      - name: Create reports dir
+        run: mkdir -p quiz-app/reports/gitleaks
+
+      - name: Run Gitleaks (scan quiz-app, JSON, don't fail)
+        run: |
+          # --exit-code 0 : return success even when leaks are found (we still get report)
+          # --report-format json and --report-path to save results
+          gitleaks detect --source=quiz-app --report-format=json --report-path=quiz-app/reports/gitleaks/gitleaks-report.json --exit-code 0
+
+      - name: Upload Gitleaks JSON report
         uses: actions/upload-artifact@v4
         with:
-          name: semgrep-json-report
-          path: semgrep-results.json
+          name: gitleaks-frontend-report
+          path: quiz-app/reports/gitleaks/gitleaks-report.json
