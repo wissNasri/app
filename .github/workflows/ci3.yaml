@@ -25,7 +25,7 @@ jobs:
 
       # 3️⃣ Upload du rapport JSON comme artefact
       - name: Upload JSON report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: semgrep-frontend-report
           path: semgrep-report.json
