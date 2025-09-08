@@ -20,9 +20,3 @@ jobs:
         run: |
           # Scanner le dossier complet du repo
           gitleaks detect --source=. --report-format=json --report-path=gitleaks-report.json
-
-      - name: Save Gitleaks report
-        uses: actions/upload-artifact@v3
-        with:
-          name: gitleaks-report
-          path: gitleaks-report.json
