@@ -16,16 +16,21 @@ jobs:
       matrix:
         node-version: [20.x]
         architecture: [x64]
-    container:
-      image: returntocorp/semgrep # Docker avec Semgrep pour tout le job
+
     steps:
-      - name: Check-out git repository  
+      # 1️⃣ Checkout du dépôt
+      - name: Check-out repository  
         uses: actions/checkout@v4
 
+      # 2️⃣ Setup Node.js
       - name: USE NODEJS ${{ matrix.node-version }} - ${{ matrix.architecture }}
         uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
 
-      - name: Install project dependencies 
+      # 3️⃣ Installer les dépendances et exécuter tests + lint
+      - name: Install project dependencies and run tests
         run: |
           npm i
           npm run lint
@@ -33,16 +38,25 @@ jobs:
           npm run prettier
           npm test
         env:
-          CI: true 
+          CI: true
 
+      # 4️⃣ Build du projet
       - name: Build
         run: npm run build
 
-      - name: Run Semgrep Analysis
-        run: semgrep scan -q --json --config auto ./quiz-app > semgrep-results.json
+      # 5️⃣ Installer Semgrep via pip
+      - name: Install Semgrep
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install semgrep
 
+      # 6️⃣ Exécuter Semgrep et générer le rapport JSON
+      - name: Run Semgrep Analysis
+        run: semgrep scan -q --json --config auto ./src > semgrep-results.json
+
+      # 7️⃣ Upload du rapport JSON comme artefact
       - name: Upload Semgrep JSON report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: semgrep-json-report
           path: semgrep-results.json
