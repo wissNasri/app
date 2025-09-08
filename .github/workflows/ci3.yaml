@@ -1,11 +1,7 @@
-name: OWASP Dependency-Check — quiz-app
+name: OWASP Dependency-Check — quiz-app (minimal)
 
 on:
   push:
-    branches: [ main ]
-    paths:
-      - 'quiz-app/**'        # ne trigger que si quiz-app change
-  pull_request:
     branches: [ main ]
     paths:
       - 'quiz-app/**'
@@ -14,38 +10,21 @@ jobs:
   depcheck:
     runs-on: ubuntu-latest
     steps:
-      # 1️⃣ Checkout du code
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # 2️⃣ (Optionnel) Installer Node.js si tu veux que Dependency-Check voit node_modules
-      # - name: Setup Node.js
-      #   uses: actions/setup-node@v3
-      #   with:
-      #     node-version: '20.x'
-      #
-      # - name: Install frontend dependencies
-      #   run: |
-      #     cd quiz-app
-      #     npm install
-
-      # 3️⃣ Lancer OWASP Dependency-Check
       - name: Run Dependency-Check on quiz-app
         uses: dependency-check/Dependency-Check_Action@main
-        id: depcheck
         with:
           project: 'Quiz-App'
-          path: 'quiz-app'                   # dossier à analyser
-          format: 'ALL'                      # génère HTML, JSON et XML
-          out: 'dependency-check-report'     # dossier où les rapports seront créés
+          path: 'quiz-app'
+          format: 'ALL'
+          out: 'dependency-check-report'
           args: >
-            --failOnCVSS 7                   # échoue si vulnérabilités CVSS ≥ 7
+            --failOnCVSS 7
             --enableRetired
-        env:
-          JAVA_HOME: /opt/jdk                 # requis pour l’action Marketplace
 
-      # 4️⃣ Upload des rapports
-      - name: Upload Dependency-Check report
+      - name: Upload report
         uses: actions/upload-artifact@v4
         with:
           name: Depcheck report
