@@ -130,7 +130,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: semgrep-json-report
-          path: ./backend/semgrep-report.json
+          path: ./backend/semgrep-report-backend.json
 
   gitleaks-scan-backend:
     needs: backend-test
@@ -156,6 +156,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gitleaks-json-report
-          path: ./backend/gitleaks-report.json
+          path: ./backend/gitleaks-report-backend.json
   
 
