@@ -90,7 +90,7 @@ jobs:
       image: zricethezav/gitleaks:latest  # Docker image officielle de Gitleaks
     defaults:
       run:
-        working-directory: ./quiz-app
+        working-directory: ./kubernetes-manifest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
