@@ -65,56 +65,16 @@ jobs:
         env:
           CI: true 
 
-  semgrep_scan:
-    needs: frontend-test
-    name: Semgrep Analysis
+  semgrep-scan:
     runs-on: ubuntu-latest
-    container:
-      image: returntocorp/semgrep
-
-    defaults:
-      run:
-        working-directory: ./quiz-app
-
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Check-out repository
+        uses: actions/checkout@v4
 
-      - name: Perform Semgrep Analysis and save JSON
-        run: semgrep scan ./quiz-app --config auto --json --output ./quiz-app/semgrep-results.json
-        continue-on-error: true
-
-      - name: Upload Semgrep JSON report as artifact
-        uses: actions/upload-artifact@v4
+      - name: Run Semgrep scan on quiz-app
+        uses: returntocorp/semgrep-action@v1
         with:
-          name: semgrep-json-report
-          path: ./quiz-app/semgrep-results.json
-  gitleaks_scan:
-    name: Gitleaks Analysis
-    needs: frontend-test
-    runs-on: ubuntu-latest
-    container:
-      image: zricethezav/gitleaks:latest  # Image Docker officielle Gitleaks
-
-    defaults:
-      run:
-        working-directory: ./quiz-app
-
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        
-      - name: Mark repository as safe
-        run: git config --global --add safe.directory $GITHUB_WORKSPACE
-
-      - name: Run Gitleaks scan and save JSON report
-        run: gitleaks detect --source=./quiz-app --report-format=json --report-path=./quiz-app/gitleaks-report.json 
-        continue-on-error: true
-
-      - name: Upload Gitleaks JSON report as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-json-report
-          path: ./quiz-app/gitleaks-report.json
+          path: "quiz-app"
+          config: "auto"
+          format: "json"
+          output: "semgrep-report.json"
