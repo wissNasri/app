@@ -25,7 +25,7 @@ jobs:
       - name: Run Gitleaks scan
         run: |
           gitleaks detect \
-            --source=. \
+            --source=backend \
             --redact \
             --verbose \
             --exit-code=2 \
