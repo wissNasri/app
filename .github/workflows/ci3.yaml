@@ -1,44 +1,39 @@
 name: Gitleaks Scan
 
-# Déclencheurs du workflow
 on:
   push:
     branches:
-      - main # ou master, selon le nom de votre branche principale
+      - main
   pull_request:
     branches:
-      - main # ou master
+      - main
 
 jobs:
   scan:
     name: Gitleaks
     runs-on: ubuntu-latest
     steps:
-      # 1. Étape de checkout du code
-      # 'fetch-depth: 0' est crucial pour que Gitleaks puisse scanner tout l'historique des commits.
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2. Étape d'exécution de Gitleaks
-      # Utilise l'action officielle de Gitleaks, qui est la méthode recommandée.
+      # Étape corrigée : Utiliser 'with' pour configurer le rapport
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
+        with:
+          # Force le format de rapport à 'json'
+          report_format: json
+          # Force le nom et l'emplacement du rapport
+          report_path: ${{ github.workspace }}/gitleaks-report.json
         env:
-          # Le GITHUB_TOKEN est nécessaire pour que l'action puisse interagir avec l'API GitHub,
-          # par exemple pour publier des commentaires dans les Pull Requests (si configuré).
+          # Le token reste nécessaire
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
-          # Configuration pour générer un rapport JSON
-          GITLEAKS_REPORT_PATH: ${{ github.workspace }}/gitleaks-report.json
-          GITLEAKS_REPORT_FORMAT: json
 
-      # 3. Étape d'upload du rapport
-      # Sauvegarde le rapport JSON en tant qu'artefact du workflow.
+      # Cette étape fonctionnera maintenant car le fichier existera
       - name: Upload Gitleaks report as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gitleaks-report # Nom de l'artefact qui sera téléchargeable
-          path: ${{ github.workspace }}/gitleaks-report.json # Chemin vers le fichier à uploader
+          name: gitleaks-report
+          path: ${{ github.workspace }}/gitleaks-report.json
 
