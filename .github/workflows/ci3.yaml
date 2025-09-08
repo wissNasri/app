@@ -1,31 +1,41 @@
-name: OWASP Dependency-Check — quiz-app
+name: OWASP Dependency-Check — Maven Project
 
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'quiz-app/**'
+  pull_request:
+    branches: [ main ]
 
 jobs:
   depcheck:
     runs-on: ubuntu-latest
     steps:
+      # 1️⃣ Récupération du code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Dependency-Check on quiz-app
-        uses: dependency-check/Dependency-Check_Action@main
-        with:
-          project: 'Quiz-App'
-          path: 'quiz-app'
-          format: 'ALL'
-          out: 'dependency-check-quiz-app'
-          args: >
-            --failOnCVSS 7
-            --enableRetired
+      # 2️⃣ Build du projet Maven
+      - name: Build project with Maven
+        run: mvn clean install
 
+      # 3️⃣ Analyse avec OWASP Dependency-Check (Marketplace Action)
+      - name: Run Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        id: depcheck
+        with:
+          project: 'MyMavenProject'
+          path: '.'                       # racine du projet Maven
+          format: 'ALL'                   # HTML, JSON, XML
+          out: 'dependency-check-report'  # dossier où les rapports seront créés
+          args: >
+            --failOnCVSS 7                # échoue si vulnérabilités CVSS ≥ 7
+            --enableRetired               # inclut les bibliothèques retirées
+        env:
+          JAVA_HOME: /opt/jdk              # requis pour l’action
+
+      # 4️⃣ Upload des rapports
       - name: Upload Dependency-Check report
         uses: actions/upload-artifact@v4
         with:
           name: Depcheck report
-          path: dependency-check-quiz-app
+          path: dependency-check-report
