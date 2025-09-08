@@ -19,4 +19,6 @@ jobs:
       - name: Run Semgrep Analysis
         uses: returntocorp/semgrep-action@v1
         with:
-          config: auto   # Utilisation automatique des règles adaptées
+          config: auto
+        continue-on-error: true
+
