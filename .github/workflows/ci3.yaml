@@ -8,7 +8,6 @@ on:
     branches:
       - main
 
-
 jobs:
   scan:
     name: Gitleaks
@@ -19,22 +18,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Étape corrigée : Utiliser 'with' pour configurer le rapport
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
         with:
-          # Force le format de rapport à 'json'
+          # Ligne ajoutée pour être explicite : scanner tout le projet
+          source: ${{ github.workspace }}
+          
+          # Vos configurations existantes
           report_format: json
-          # Force le nom et l'emplacement du rapport
           report_path: ${{ github.workspace }}/gitleaks-report.json
         env:
-          # Le token reste nécessaire
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Cette étape fonctionnera maintenant car le fichier existera
       - name: Upload Gitleaks report as artifact
         uses: actions/upload-artifact@v4
         with:
           name: gitleaks-report
           path: ${{ github.workspace }}/gitleaks-report.json
-
