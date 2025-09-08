@@ -69,11 +69,17 @@ jobs:
       image: returntocorp/semgrep
     defaults:
       run:
-        working-directory: ./backend
+        working-directory: ./quiz-app
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Semgrep scan
-        run: semgrep scan --config auto .
+      - name: Run Semgrep scan (with JSON report)
+        run: semgrep scan --config auto . --json > semgrep-report.json
+
+      - name: Upload Semgrep JSON report
+        uses: actions/upload-artifact@v3
+        with:
+          name: semgrep-json-report
+          path: ./quiz-app/semgrep-report.json
 
