@@ -1,37 +1,22 @@
-name: Gitleaks - frontend scan (Docker)
+name: Semgrep
 
 on:
-  pull_request: {}
-  workflow_dispatch: {}
+  pull_request: {}      # Scan des fichiers modifiés dans les PR
+  workflow_dispatch: {} # Lancement manuel possible
   push:
-    branches: ["main"]
+    branches:
+      - "main"          # Scan du code mergé sur main
 
 jobs:
-  gitleaks_scan:
-    name: Gitleaks Frontend Scan
+  semgrep_scan:
+    name: Semgrep Analysis
     runs-on: ubuntu-latest
-
-    # Exécute tout le job dans l'image officielle Gitleaks
-    container:
-      image: ghcr.io/gitleaks/gitleaks:latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
+
+      - name: Run Semgrep Analysis
+        uses: returntocorp/semgrep-action@v1
         with:
-          fetch-depth: 0
-
-      - name: Create reports dir
-        run: mkdir -p quiz-app/reports/gitleaks
-
-      - name: Run Gitleaks (scan quiz-app, JSON, don't fail)
-        run: |
-          # --exit-code 0 : return success even when leaks are found (we still get report)
-          # --report-format json and --report-path to save results
-          gitleaks detect --source=quiz-app --report-format=json --report-path=quiz-app/reports/gitleaks/gitleaks-report.json --exit-code 0
-
-      - name: Upload Gitleaks JSON report
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-frontend-report
-          path: quiz-app/reports/gitleaks/gitleaks-report.json
+          config: auto   # Utilisation automatique des règles adaptées
