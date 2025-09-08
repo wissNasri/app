@@ -69,7 +69,7 @@ jobs:
       image: returntocorp/semgrep
     defaults:
       run:
-        working-directory: ./quiz-app
+        working-directory: ./backend
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
