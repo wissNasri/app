@@ -16,8 +16,7 @@ jobs:
       matrix:
         node-version: [20.x]
         architecture: [x64]
-    container:
-      image: returntocorp/semgrep # Docker avec Semgrep pour tout le job
+
     steps:
       - name: Check-out git repository  
         uses: actions/checkout@v4
@@ -40,11 +39,18 @@ jobs:
         run: npm run build
         working-directory: ./quiz-app
 
+      - name: Install Semgrep
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install semgrep
+
+      # 6️⃣ Exécuter Semgrep et générer le rapport JSON
       - name: Run Semgrep Analysis
         run: semgrep scan -q --json --config auto ./src > semgrep-results.json
+
       # 7️⃣ Upload du rapport JSON comme artefact
       - name: Upload Semgrep JSON report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: semgrep-json-report
           path: semgrep-results.json
