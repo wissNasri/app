@@ -1,37 +1,48 @@
-name: OWASP Dependency-Check — Maven Project
+name: OWASP Dependency-Check — quiz-app
 
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'quiz-app/**'        # ne trigger que si quiz-app change
   pull_request:
     branches: [ main ]
+    paths:
+      - 'quiz-app/**'
 
 jobs:
   depcheck:
     runs-on: ubuntu-latest
     steps:
-      # 1️⃣ Récupération du code
+      # 1️⃣ Checkout du code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Build du projet Maven
-      - name: Build project with Maven
-        run: mvn clean install
+      # 2️⃣ (Optionnel) Installer Node.js si tu veux que Dependency-Check voit node_modules
+      # - name: Setup Node.js
+      #   uses: actions/setup-node@v3
+      #   with:
+      #     node-version: '20.x'
+      #
+      # - name: Install frontend dependencies
+      #   run: |
+      #     cd quiz-app
+      #     npm install
 
-      # 3️⃣ Analyse avec OWASP Dependency-Check (Marketplace Action)
-      - name: Run Dependency-Check
+      # 3️⃣ Lancer OWASP Dependency-Check
+      - name: Run Dependency-Check on quiz-app
         uses: dependency-check/Dependency-Check_Action@main
         id: depcheck
         with:
-          project: 'MyMavenProject'
-          path: '.'                       # racine du projet Maven
-          format: 'ALL'                   # HTML, JSON, XML
-          out: 'dependency-check-report'  # dossier où les rapports seront créés
+          project: 'Quiz-App'
+          path: 'quiz-app'                   # dossier à analyser
+          format: 'ALL'                      # génère HTML, JSON et XML
+          out: 'dependency-check-report'     # dossier où les rapports seront créés
           args: >
-            --failOnCVSS 7                # échoue si vulnérabilités CVSS ≥ 7
-            --enableRetired               # inclut les bibliothèques retirées
+            --failOnCVSS 7                   # échoue si vulnérabilités CVSS ≥ 7
+            --enableRetired
         env:
-          JAVA_HOME: /opt/jdk              # requis pour l’action
+          JAVA_HOME: /opt/jdk                 # requis pour l’action Marketplace
 
       # 4️⃣ Upload des rapports
       - name: Upload Dependency-Check report
