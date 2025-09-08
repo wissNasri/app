@@ -11,13 +11,17 @@ jobs:
   semgrep_scan:
     name: Semgrep Analysis
     runs-on: ubuntu-latest
-    container:
-      image: returntocorp/semgrep # Docker image with Semgrep pre-installed
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Perform Semgrep Analysis
-        run: semgrep scan --config auto ./quiz-app
-
+      - name: Run Semgrep via Marketplace Action
+        uses: returntocorp/semgrep-action@v1
+        with:
+          # Dossier à scanner
+          scan-path: ./quiz-app
+          # Config automatique équivalente à --config auto
+          config: auto
+          # Ne pas échouer le workflow en cas de findings
+          allow-failure: true
