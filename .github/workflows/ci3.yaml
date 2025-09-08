@@ -1,4 +1,4 @@
-name: Semgrep Scan (Marketplace)
+name: Semgrep Scan (Docker Image)
 
 on:
   pull_request: {}
@@ -9,15 +9,15 @@ on:
 jobs:
   semgrep_scan:
     runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep  # Docker image avec Semgrep préinstallé
 
     steps:
       # Étape 1 : Checkout du dépôt
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Étape 2 : Lancer Semgrep via Marketplace
-      - name: Run Semgrep
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: auto
-        continue-on-error: true  # Le workflow continue même si des vulnérabilités sont trouvées
+      # Étape 2 : Lancer Semgrep
+      - name: Run Semgrep scan
+        run: semgrep scan -q --config auto ./
+        continue-on-error: true  # Ne bloque pas le workflow si des vulnérabilités sont trouvées
