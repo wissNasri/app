@@ -11,16 +11,17 @@ jobs:
   semgrep_scan:
     name: Semgrep Analysis
     runs-on: ubuntu-latest
-    container:
-      image: returntocorp/semgrep  # Docker image avec Semgrep préinstallé
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Install Semgrep
+        run: pip install semgrep
+
       - name: Perform Semgrep Analysis and generate JSON report
-        run: semgrep scan --config auto --json ./ > semgrep-results.json
-        continue-on-error: true   # Ne bloque pas le workflow si des vulnérabilités sont trouvées
+        run: semgrep --config auto --json ./ > semgrep-results.json
+        continue-on-error: true  # Ne bloque pas le workflow si vulnérabilités trouvées
 
       - name: Upload Semgrep JSON report as artifact
         uses: actions/upload-artifact@v4
