@@ -1,37 +1,35 @@
+# Nom du workflow qui apparaîtra dans l'onglet "Actions" de GitHub
 name: Gitleaks Scan
 
+# Déclencheurs du workflow
 on:
   push:
     branches:
-      - main
+      - main # ou votre branche principale (ex: master)
   pull_request:
     branches:
-      - main
+      - main # ou votre branche principale
 
 jobs:
   scan:
-    name: Gitleaks
+    name: gitleaks
     runs-on: ubuntu-latest
     steps:
+      # Étape 1: Cloner le dépôt
+      # 'fetch-depth: 0' est CRUCIAL pour que Gitleaks puisse analyser tout l'historique.
+      # Sans cela, seule la dernière version du code serait analysée.
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Run Gitleaks
+      # Étape 2: Exécuter l'action Gitleaks
+      # C'est l'action officielle de la marketplace.
+      - name: Run Gitleaks Action
         uses: gitleaks/gitleaks-action@v2
-        with:
-          # Ligne ajoutée pour être explicite : scanner tout le projet
-          source: ${{ github.workspace }}
-          
-          # Vos configurations existantes
-          report_format: json
-          report_path: ${{ github.workspace }}/gitleaks-report.json
         env:
+          # Le GITHUB_TOKEN est nécessaire pour que l'action puisse, par exemple,
+          # commenter une Pull Request si un secret est trouvé.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Gitleaks report as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-report
-          path: ${{ github.workspace }}/gitleaks-report.json
+          # Une licence est requise pour les organisations, mais pas pour les comptes personnels. [2, 14]
+          # GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
