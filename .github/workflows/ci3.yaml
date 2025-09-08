@@ -19,27 +19,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # 'fetch-depth: 0' est CRUCIAL pour que Gitleaks puisse analyser tout l'historique.
-          fetch-depth: 0
+          fetch-depth: 0 # Important pour scanner tout l'historique
 
-      # Étape 2: Exécuter l'action Gitleaks et générer un rapport
+      # Étape 2: Exécuter l'action Gitleaks
       - name: Run Gitleaks Action
-        id: gitleaks # Ajout d'un ID pour référencer cette étape plus tard
         uses: gitleaks/gitleaks-action@v2
         env:
+          # Variable spéciale pour passer des arguments directement à la commande gitleaks
+          # On lui demande de générer un rapport JSON nommé 'gitleaks-report.json'
+          GITLEAKS_ARGS: '--report-path=gitleaks-report.json --report-format=json'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # Demande à Gitleaks de générer un rapport au format JSON
-          report-format: json
-          # Le nom du fichier de rapport qui sera créé
-          report-name: gitleaks-report
         continue-on-error: true # La pipeline continue même si des fuites sont trouvées
 
       # Étape 3: Uploader le rapport Gitleaks en tant qu'artefact
-      - name: Upload Gitleaks report
-        if: always() # S'exécute toujours, même si l'étape précédente a échoué (utile sans continue-on-error)
+      - name: Upload Gitleaks JSON report
         uses: actions/upload-artifact@v4
         with:
-          name: gitleaks-report # Le nom de l'artefact qui apparaîtra sur GitHub
-          path: gitleaks-report.json # Le chemin vers le fichier à uploader
+          name: gitleaks-report-json # Nom de l'artefact
+          path: gitleaks-report.json # Chemin vers le fichier à uploader
+          retention-days: 5 # Optionnel: combien de temps garder l'artefact
 
