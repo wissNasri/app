@@ -1,4 +1,4 @@
-name: Gitleaks Scan (Marketplace simple)
+name: Gitleaks Scan (Docker + JSON)
 
 on:
   pull_request: {}
@@ -9,15 +9,33 @@ on:
 jobs:
   gitleaks_scan:
     runs-on: ubuntu-latest
+    container:
+      image: zricethezav/gitleaks:latest  # Docker officiel Gitleaks
 
     steps:
       # Étape 1 : Checkout du dépôt
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Étape 2 : Lancer le scan via Marketplace
-      - name: Run Gitleaks using Marketplace Action
-        uses: zricethezav/gitleaks-action@v2
+      # Étape 2 : Marquer le dépôt safe pour Git
+      - name: Mark repository as safe
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+
+      # Étape 3 : Lancer Gitleaks et générer JSON
+      - name: Run Gitleaks scan
+        run: |
+          gitleaks detect \
+            --source=. \
+            --redact \
+            --verbose \
+            --exit-code=2 \
+            --report-format=json \
+            --report-path=gitleaks-results.json
+        continue-on-error: true
+
+      # Étape 4 : Upload du rapport JSON
+      - name: Upload Gitleaks JSON report
+        uses: actions/upload-artifact@v4
         with:
-          args: detect --source=.
-        continue-on-error: true   # Le job continue même si des secrets sont trouvés
+          name: gitleaks-json-report
+          path: gitleaks-results.json
