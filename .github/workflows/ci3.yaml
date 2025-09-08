@@ -1,4 +1,4 @@
-name: Gitleaks Scan (pip/binaire)
+name: Gitleaks Scan
 
 on:
   pull_request: {}
@@ -21,11 +21,5 @@ jobs:
           sudo mv gitleaks /usr/local/bin/
 
       - name: Run Gitleaks scan
-        run: gitleaks detect --source=. --report-format=json --report-path=gitleaks-report.json
-        continue-on-error: true
-
-      - name: Upload Gitleaks JSON report
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-json-report
-          path: gitleaks-report.json
+        run: gitleaks detect --source=. 
+        continue-on-error: true   # Ne bloque pas le workflow si des secrets sont détectés
