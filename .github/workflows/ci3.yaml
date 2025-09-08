@@ -1,4 +1,4 @@
-name: Gitleaks Scan (Docker + JSON)
+name: Semgrep Scan (Marketplace)
 
 on:
   pull_request: {}
@@ -7,35 +7,17 @@ on:
       - "main"
 
 jobs:
-  gitleaks_scan:
+  semgrep_scan:
     runs-on: ubuntu-latest
-    container:
-      image: zricethezav/gitleaks:latest  # Docker officiel Gitleaks
 
     steps:
       # Étape 1 : Checkout du dépôt
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Étape 2 : Marquer le dépôt safe pour Git
-      - name: Mark repository as safe
-        run: git config --global --add safe.directory $GITHUB_WORKSPACE
-
-      # Étape 3 : Lancer Gitleaks et générer JSON
-      - name: Run Gitleaks scan
-        run: |
-          gitleaks detect \
-            --source=. \
-            --redact \
-            --verbose \
-            --exit-code=2 \
-            --report-format=json \
-            --report-path=gitleaks-results.json
-        continue-on-error: true
-
-      # Étape 4 : Upload du rapport JSON
-      - name: Upload Gitleaks JSON report
-        uses: actions/upload-artifact@v4
+      # Étape 2 : Lancer Semgrep via Marketplace
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
         with:
-          name: gitleaks-json-report
-          path: gitleaks-results.json
+          config: auto
+        continue-on-error: true  # Le workflow continue même si des vulnérabilités sont trouvées
