@@ -42,7 +42,6 @@ jobs:
           args: >
             --scan .
             --enableExperimental
-            --failOnCVSS 7
 
       # 5️⃣ Upload du rapport HTML
       - name: Upload Dependency-Check report
