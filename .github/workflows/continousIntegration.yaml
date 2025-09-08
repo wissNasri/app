@@ -8,10 +8,7 @@ on:
 
 jobs:
   frontend-test:
-  
     runs-on: ubuntu-latest
-    container:
-     image: returntocorp/semgrep
     defaults:
       run:
         working-directory: ./quiz-app
@@ -19,10 +16,6 @@ jobs:
       matrix:
         node-version: [20.x]
         architecture: [x64]
-    
-    permissions:
-      actions: read
-      contents: read    
     steps:
       - name: Check-out git repository  
         uses: actions/checkout@v4
@@ -44,12 +37,3 @@ jobs:
       - name: Build
         run: npm run build
         working-directory: ./quiz-app
-      # semgrep analyse  
-      - name: Perform Semgrep Analysis
-        run: semgrep scan -q --json --config auto ./quia-app > semgrep-results.json
-
-      - name: Upload JSON report as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: semgrep-json-report
-          path: semgrep-results.json
