@@ -10,7 +10,6 @@ jobs:
   security-check:
     runs-on: ubuntu-latest
 
-    # Spécifie le répertoire de travail pour toutes les commandes
     defaults:
       run:
         working-directory: ./quiz-app
@@ -28,29 +27,26 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'quiz-app/package-lock.json'
 
-      # 3️⃣ Installation des dépendances (NÉCESSAIRE pour que l'analyse fonctionne)
-      # L'analyseur a besoin du dossier node_modules pour être plus précis.
+      # 3️⃣ Installation des dépendances
       - name: Install NPM dependencies
         run: npm install
 
-      # 4️⃣ Analyse avec OWASP Dependency-Check (méthode alternative)
+      # 4️⃣ Analyse avec OWASP Dependency-Check (CORRIGÉ)
       - name: Run OWASP Dependency-Check
         uses: dependency-check/Dependency-Check_Action@main
         with:
-          # Le chemin pointe vers le dossier contenant package.json
-          path: './quiz-app'
+          project: 'quiz-app'             # Nom du projet (obligatoire)
+          path: './quiz-app'              # Chemin à analyser
           format: 'HTML'
-          out: 'reports' # Dossier où le rapport sera créé (à la racine du projet)
+          out: 'reports'
           args: >
             --scan .
             --enableExperimental
             --failOnCVSS 7
-        # Note : Pas besoin de 'project' ou 'env: JAVA_HOME' ici
 
       # 5️⃣ Upload du rapport HTML
       - name: Upload Dependency-Check report
         uses: actions/upload-artifact@v4
         with:
           name: owasp-dep-check-report
-          path: reports # Récupère le dossier des rapports
-
+          path: reports
