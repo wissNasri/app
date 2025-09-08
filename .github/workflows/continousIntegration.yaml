@@ -70,6 +70,3 @@ jobs:
 
       - name: Run Semgrep scan on quiz-app
         uses: returntocorp/semgrep-action@v1
-        with:
-          config: "auto"
-          args: "ci --json --output semgrep-report.json quiz-app"
