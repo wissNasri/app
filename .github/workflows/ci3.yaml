@@ -18,6 +18,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Perform Semgrep Analysis
-        run: semgrep scan -q --config auto ./
+      - name: Perform Semgrep Analysis and generate JSON report
+        run: semgrep scan --config auto --json ./ > semgrep-results.json
         continue-on-error: true   # Ne bloque pas le workflow si des vulnérabilités sont trouvées
+
+      - name: Upload Semgrep JSON report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-json-report
+          path: semgrep-results.json
