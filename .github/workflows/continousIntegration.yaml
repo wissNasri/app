@@ -89,3 +89,26 @@ jobs:
         with:
           name: semgrep-json-report
           path: ./quiz-app/semgrep-results.json
+  gitleaks_scan:
+    name: Gitleaks Analysis
+    needs: frontend-test
+    runs-on: ubuntu-latest
+    container:
+      image: zricethezav/gitleaks:latest  # Image Docker officielle Gitleaks
+
+    defaults:
+      run:
+        working-directory: ./quiz-app
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Run Gitleaks scan and save JSON report
+        run: gitleaks detect --report-format=json --report-path=gitleaks-report.json
+
+      - name: Upload Gitleaks JSON report as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: gitleaks-json-report
+          path: ./quiz-app/gitleaks-report.json
