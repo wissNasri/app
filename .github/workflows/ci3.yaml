@@ -1,4 +1,4 @@
-name: Gitleaks Scan (Marketplace)
+name: Gitleaks Scan (Marketplace + JSON)
 
 on:
   pull_request: {}
@@ -11,13 +11,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Étape 1 : Récupérer le code du dépôt
+      # Étape 1 : Checkout du dépôt
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Étape 2 : Lancer le scan via Marketplace
+      # Étape 2 : Lancer le scan via Marketplace et générer JSON
       - name: Run Gitleaks using Marketplace Action
         uses: zricethezav/gitleaks-action@v2
         with:
-          args: detect --source=.
+          args: detect --source=. --report-format=json --report-path=gitleaks-results.json
         continue-on-error: true   # Ne bloque pas le workflow si des secrets sont détectés
+
+      # Étape 3 : Upload du rapport JSON comme artifact
+      - name: Upload Gitleaks JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-json-report
+          path: gitleaks-results.json
