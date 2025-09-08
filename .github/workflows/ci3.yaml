@@ -1,4 +1,4 @@
-name: Gitleaks Scan via Docker
+name: Gitleaks Scan via Marketplace
 
 on:
   push:
@@ -9,17 +9,10 @@ on:
 jobs:
   gitleaks_scan:
     runs-on: ubuntu-latest
-    container:
-      image: zricethezav/gitleaks:latest  # Docker image officielle de Gitleaks
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Fix Git ownership issue
-        run: |
-          git config --global --add safe.directory $GITHUB_WORKSPACE
-
-      - name: Run Gitleaks scan
-        run: |
-          gitleaks detect --source=. || true
+      - name: Run Gitleaks via Marketplace
+        uses: zricethezav/gitleaks-action@v2
