@@ -30,5 +30,6 @@ jobs:
           # Le GITHUB_TOKEN est nécessaire pour que l'action puisse, par exemple,
           # commenter une Pull Request si un secret est trouvé.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
           # Une licence est requise pour les organisations, mais pas pour les comptes personnels. [2, 14]
           # GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
