@@ -124,7 +124,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Semgrep scan 
-        run: semgrep scan --config auto . --json --output semgrep-report.json
+        run: semgrep scan --config auto . --json --output semgrep-report-backend.json
 
       - name: Upload Semgrep JSON report
         uses: actions/upload-artifact@v4
@@ -149,7 +149,8 @@ jobs:
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
   
       - name: Run Gitleaks scan on kubernetes-manifest
-        run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report.json
+        run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-backend.json
+  
         continue-on-error: true
   
       - name: Upload Gitleaks JSON report
