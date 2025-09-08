@@ -1,8 +1,8 @@
 name: Semgrep
 
 on:
-  pull_request: {}
-  workflow_dispatch: {}
+  pull_request: {}      
+  workflow_dispatch: {} 
   push:
     branches:
       - "main"
@@ -12,18 +12,12 @@ jobs:
     name: Semgrep Analysis
     runs-on: ubuntu-latest
     container:
-      image: returntocorp/semgrep  # Docker avec Semgrep préinstallé
+      image: returntocorp/semgrep  # Docker image avec Semgrep préinstallé
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Run Semgrep Analysis
-        run: semgrep scan --config auto --json ./quuiz-app > semgrep-results.json
-        continue-on-error: true  # Ne bloque pas le workflow si vulnérabilités trouvées
-
-      - name: Upload Semgrep JSON report as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: semgrep-json-report
-          path: semgrep-results.json
+      - name: Perform Semgrep Analysis
+        run: semgrep scan -q --config auto ./
+        continue-on-error: true   # Ne bloque pas le workflow si des vulnérabilités sont trouvées
