@@ -82,7 +82,8 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Perform Semgrep Analysis and save JSON
-        run: semgrep scan   ./quiz-app  --config auto --json --output semgrep-results.json
+        semgrep scan ./quiz-app --config auto
+
         continue-on-error: true
 
       - name: Upload Semgrep JSON report as artifact
