@@ -82,7 +82,7 @@ jobs:
       - name: Upload Semgrep JSON report
         uses: actions/upload-artifact@v4
         with:
-          name: semgrep-json-report
+          name: semgrep-json-frontend-report
           path: ./quiz-app/semgrep-report-frontend.json
 
   gitleaks-scan:
@@ -108,7 +108,7 @@ jobs:
       - name: Upload Gitleaks JSON report
         uses: actions/upload-artifact@v4
         with:
-          name: gitleaks-json-report
+          name: gitleaks-json-frontend-report
           path: ./quiz-app/gitleaks-report-frontend.json
   ######
   semgrep-scan-backend:
