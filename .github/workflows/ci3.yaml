@@ -17,14 +17,14 @@ jobs:
         uses: dependency-check/Dependency-Check_Action@main
         with:
           project: 'Quiz-App'
-          path: 'quiz-app'
-          format: 'ALL'
+          path: 'quiz-app'                   # dossier à analyser
+          format: 'ALL'                      # HTML, JSON, XML
           out: 'dependency-check-quiz-app'
           args: >
             --failOnCVSS 7
             --enableRetired
         env:
-          JAVA_HOME: /opt/jdk
+          JAVA_HOME: /opt/jdk                # requis pour l'action
 
       - name: Upload Dependency-Check report
         uses: actions/upload-artifact@v4
