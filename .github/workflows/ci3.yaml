@@ -1,31 +1,56 @@
-name: OWASP Dependency-Check — quiz-app (minimal)
+name: MERN Stack CI with OWASP Dependency-Check
 
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'quiz-app/**'
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  depcheck:
+  security-check:
     runs-on: ubuntu-latest
+
+    # Spécifie le répertoire de travail pour toutes les commandes
+    defaults:
+      run:
+        working-directory: ./quiz-app
+
     steps:
-      - name: Checkout
+      # 1️⃣ Récupération du code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Dependency-Check on quiz-app
+      # 2️⃣ Mise en place de Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'quiz-app/package-lock.json'
+
+      # 3️⃣ Installation des dépendances (NÉCESSAIRE pour que l'analyse fonctionne)
+      # L'analyseur a besoin du dossier node_modules pour être plus précis.
+      - name: Install NPM dependencies
+        run: npm install
+
+      # 4️⃣ Analyse avec OWASP Dependency-Check (méthode alternative)
+      - name: Run OWASP Dependency-Check
         uses: dependency-check/Dependency-Check_Action@main
         with:
-          project: 'Quiz-App'
-          path: 'quiz-app'
-          format: 'ALL'
-          out: 'dependency-check-report'
+          # Le chemin pointe vers le dossier contenant package.json
+          path: './quiz-app'
+          format: 'HTML'
+          out: 'reports' # Dossier où le rapport sera créé (à la racine du projet)
           args: >
+            --scan .
+            --enableExperimental
             --failOnCVSS 7
-            --enableRetired
+        # Note : Pas besoin de 'project' ou 'env: JAVA_HOME' ici
 
-      - name: Upload report
+      # 5️⃣ Upload du rapport HTML
+      - name: Upload Dependency-Check report
         uses: actions/upload-artifact@v4
         with:
-          name: Depcheck report
-          path: dependency-check-report
+          name: owasp-dep-check-report
+          path: reports # Récupère le dossier des rapports
+
