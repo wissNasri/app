@@ -1,51 +1,44 @@
-name: MERN Stack CI with OWASP Dependency-Check
+name: Gitleaks Scan
 
+# Déclencheurs du workflow
 on:
   push:
-    branches: [ master ]
+    branches:
+      - main # ou master, selon le nom de votre branche principale
   pull_request:
-    branches: [ master ]
+    branches:
+      - main # ou master
 
 jobs:
-  security-check:
+  scan:
+    name: Gitleaks
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: ./quiz-app
-
     steps:
-      # 1️⃣ Récupération du code
-      - name: Checkout repository
+      # 1. Étape de checkout du code
+      # 'fetch-depth: 0' est crucial pour que Gitleaks puisse scanner tout l'historique des commits.
+      - name: Checkout code
         uses: actions/checkout@v4
-
-      # 2️⃣ Mise en place de Node.js
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: 'quiz-app/package-lock.json'
+          fetch-depth: 0
 
-      # 3️⃣ Installation des dépendances
-      - name: Install NPM dependencies
-        run: npm install
+      # 2. Étape d'exécution de Gitleaks
+      # Utilise l'action officielle de Gitleaks, qui est la méthode recommandée.
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          # Le GITHUB_TOKEN est nécessaire pour que l'action puisse interagir avec l'API GitHub,
+          # par exemple pour publier des commentaires dans les Pull Requests (si configuré).
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+          # Configuration pour générer un rapport JSON
+          GITLEAKS_REPORT_PATH: ${{ github.workspace }}/gitleaks-report.json
+          GITLEAKS_REPORT_FORMAT: json
 
-      # 4️⃣ Analyse avec OWASP Dependency-Check (CORRIGÉ)
-      - name: Run OWASP Dependency-Check
-        uses: dependency-check/Dependency-Check_Action@main
-        with:
-          project: 'quiz-app'             # Nom du projet (obligatoire)
-          path: './quiz-app'              # Chemin à analyser
-          format: 'HTML'
-          out: 'reports'
-          args: >
-            --scan .
-            --enableExperimental
-
-      # 5️⃣ Upload du rapport HTML
-      - name: Upload Dependency-Check report
+      # 3. Étape d'upload du rapport
+      # Sauvegarde le rapport JSON en tant qu'artefact du workflow.
+      - name: Upload Gitleaks report as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: owasp-dep-check-report
-          path: reports
+          name: gitleaks-report # Nom de l'artefact qui sera téléchargeable
+          path: ${{ github.workspace }}/gitleaks-report.json # Chemin vers le fichier à uploader
+
