@@ -94,6 +94,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
+      - name: Mark GitHub workspace as safe
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - name: Run Gitleaks scan on quiz-app
         run: gitleaks detect --source . --no-banner
