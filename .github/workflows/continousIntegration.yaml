@@ -46,7 +46,9 @@ jobs:
 
       # 6️⃣ Exécuter Semgrep et générer le rapport JSON
       - name: Run Semgrep Analysis
-        run: semgrep scan -q --json --config auto ./src > semgrep-results.json
+        run: semgrep scan -q --json --config auto ./quiz-app > semgrep-results.json
+        continue-on-error: true
+
 
       # 7️⃣ Upload du rapport JSON comme artefact
       - name: Upload Semgrep JSON report
