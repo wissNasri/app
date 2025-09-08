@@ -16,7 +16,6 @@ jobs:
       matrix:
         node-version: [20.x]
         architecture: [x64]
-
     steps:
       - name: Check-out git repository  
         uses: actions/checkout@v4
@@ -25,7 +24,6 @@ jobs:
         uses: actions/setup-node@v4
 
       - name: Install project dependencies 
-        working-directory: ./quiz-app
         run: |
           npm i
           npm run lint
@@ -37,7 +35,7 @@ jobs:
 
       - name: Build
         run: npm run build
-        working-directory: ./quiz-app
+
   backend-test:
     runs-on: ubuntu-latest
     defaults:
@@ -55,7 +53,6 @@ jobs:
         uses: actions/setup-node@v4
 
       - name: Install project dependencies 
-        working-directory: ./backend
         run: |
           npm i
           npm run lint
@@ -64,15 +61,15 @@ jobs:
           npm test
         env:
           CI: true 
-semgrep-scan:
-  runs-on: ubuntu-latest
-  steps:
-    - name: Check-out repository
-      uses: actions/checkout@v4
 
-    - name: Run Semgrep scan on quiz-app
-      uses: returntocorp/semgrep-action@v1
-      with:
-        config: "auto"
-        args: "ci --json --output semgrep-report.json quiz-app"
+  semgrep-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check-out repository
+        uses: actions/checkout@v4
 
+      - name: Run Semgrep scan on quiz-app
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: "auto"
+          args: "ci --json --output semgrep-report.json quiz-app"
