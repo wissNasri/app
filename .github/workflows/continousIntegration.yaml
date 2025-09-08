@@ -63,6 +63,7 @@ jobs:
           CI: true 
 
   semgrep-scan:
+    needs: frontend-test
     name: Semgrep Analysis (quiz-app only)
     runs-on: ubuntu-latest
     container:
@@ -84,6 +85,7 @@ jobs:
           path: ./quiz-app/semgrep-report.json
 
   gitleaks-scan:
+    needs: frontend-test
     name: Gitleaks Analysis (quiz-app only)
     runs-on: ubuntu-latest
     container:
@@ -107,4 +109,53 @@ jobs:
         with:
           name: gitleaks-json-report
           path: ./quiz-app/gitleaks-report.json
+  ######
+  semgrep-scan-backend:
+    needs: backend-test
+    name: Semgrep Analysis 
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep
+    defaults:
+      run:
+        working-directory: ./backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep scan 
+        run: semgrep scan --config auto . --json --output semgrep-report.json
+
+      - name: Upload Semgrep JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-json-report
+          path: ./quiz-app/semgrep-report.json
+
+  gitleaks-scan-backend:
+    needs: backend-test
+    name: Gitleaks Analysis 
+    runs-on: ubuntu-latest
+    container:
+      image: zricethezav/gitleaks:latest  # Docker image officielle de Gitleaks
+    defaults:
+      run:
+        working-directory: ./backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
   
+      - name: Mark GitHub workspace as safe
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+  
+      - name: Run Gitleaks scan on kubernetes-manifest
+        run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report.json
+        continue-on-error: true
+  
+      - name: Upload Gitleaks JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-json-report
+          path: ./quiz-app/gitleaks-report.json
+  
+
