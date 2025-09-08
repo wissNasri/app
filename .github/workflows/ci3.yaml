@@ -14,10 +14,5 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Run Gitleaks via Marketplace Action
+      - name: Run Gitleaks via Marketplace
         uses: zricethezav/gitleaks-action@v2
-        with:
-          # Dossier à scanner (optionnel, default = repo root)
-          # scan-path: ./quiz-app   # décommente si tu veux scanner uniquement quiz-app
-          config-path: ""          # config par défaut
-          ignore-exit-code: true   # ne pas échouer le job si des secrets sont trouvés
