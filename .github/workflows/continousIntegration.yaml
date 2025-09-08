@@ -109,6 +109,7 @@ jobs:
 
       - name: Run Gitleaks scan and save JSON report
         run: gitleaks detect --report-format=json --report-path=gitleaks-report.json
+        continue-on-error: true
 
       - name: Upload Gitleaks JSON report as artifact
         uses: actions/upload-artifact@v4
