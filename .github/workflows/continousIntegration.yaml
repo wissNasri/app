@@ -63,10 +63,13 @@ jobs:
           CI: true 
 
   semgrep-scan:
+    name: Semgrep Analysis (quiz-app only)
     runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep  # Docker image with Semgrep pre-installed
     steps:
-      - name: Check-out repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Run Semgrep scan on quiz-app
-        uses: returntocorp/semgrep-action@v1
+        run: semgrep scan --config auto ./quiz-app
