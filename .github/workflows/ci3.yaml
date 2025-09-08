@@ -9,25 +9,15 @@ on:
 jobs:
   gitleaks_scan:
     runs-on: ubuntu-latest
+    container:
+      image: zricethezav/gitleaks:latest  # Docker officiel Gitleaks
 
     steps:
       # Étape 1 : Récupérer le code du dépôt
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Étape 2 : Installer Gitleaks
-      - name: Install Gitleaks
-        run: |
-          # Télécharger le binaire Linux officiel
-          curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks-linux-amd64 -o gitleaks
-          chmod +x gitleaks
-          # Vérifier que le binaire fonctionne
-          ./gitleaks version
-          # Déplacer dans le PATH
-          sudo mv gitleaks /usr/local/bin/
-
-      # Étape 3 : Exécuter le scan
+      # Étape 2 : Exécuter le scan
       - name: Run Gitleaks scan
-        run: gitleaks detect --source=. 
+        run: gitleaks detect --source=.
         continue-on-error: true   # Ne bloque pas le workflow si des secrets sont détectés
-
