@@ -1,18 +1,27 @@
-name: Gitleaks Scan via Marketplace
+name: OWASP Dependency-Check CI
 
 on:
   push:
     branches:
-      - "master"
-  pull_request: {}
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  gitleaks_scan:
+  dependency-check:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout du code
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Run Gitleaks via Marketplace
-        uses: zricethezav/gitleaks-action@v2
+      # 2️⃣ Lancer OWASP Dependency-Check via Marketplace Action
+      - name: Run OWASP Dependency-Check
+        uses: dependency-check/dependency-check-action@v2
+        with:
+          scan: './quiz-app'             # Dossier à analyser
+          format: 'ALL'                  # Formats de rapport : HTML, XML, JSON
+          out: 'dependency-check-report' # Dossier où seront générés les rapports
+          fail-on-error: true            # Échec du job si vulnérabilités critiques détectées
