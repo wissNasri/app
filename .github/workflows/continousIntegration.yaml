@@ -66,6 +66,7 @@ jobs:
           CI: true 
 
   semgrep_scan:
+    needs: frontend-test
     name: Semgrep Analysis
     runs-on: ubuntu-latest
     container:
@@ -88,7 +89,7 @@ jobs:
         run: semgrep scan -q --config auto --json --output semgrep-results.json
 
       - name: Upload Semgrep JSON report as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: semgrep-json-report
           path: ./quiz-app/semgrep-results.json
