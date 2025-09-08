@@ -108,7 +108,7 @@ jobs:
         run: gitleaks detect --report-format=json --report-path=gitleaks-report.json
 
       - name: Upload Gitleaks JSON report as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: gitleaks-json-report
           path: ./quiz-app/gitleaks-report.json
