@@ -17,12 +17,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # Étape 2 : Marquer le dépôt safe pour Git
+      - name: Mark repository as safe
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
 
       # Étape 3 : Lancer Gitleaks et générer JSON
       - name: Run Gitleaks scan
         run: |
           gitleaks detect \
-            --source=backend \
+            --source=. \
             --redact \
             --verbose \
             --exit-code=2 \
