@@ -20,7 +20,7 @@ jobs:
         id: depcheck
         with:
           project: 'Quiz-App'
-          path: 'quiz-app'             # dossier à analyser
+          path: './quiz-app'             # dossier à analyser
           format: 'ALL'                # HTML, XML, JSON
           out: 'dependency-check-report'
           args: >
