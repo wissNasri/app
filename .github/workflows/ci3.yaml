@@ -20,3 +20,4 @@ jobs:
 
       - name: Perform Semgrep Analysis
         run: semgrep scan --config auto ./quiz-app
+
