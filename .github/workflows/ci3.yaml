@@ -1,32 +1,31 @@
-name: Semgrep
+name: Gitleaks Scan (pip/binaire)
 
 on:
   pull_request: {}
-  workflow_dispatch: {}
   push:
     branches:
       - "main"
 
 jobs:
-  semgrep_scan:
+  gitleaks_scan:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Run Semgrep Analysis
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: auto          # Utilise les règles automatiques
-          json: true            # Génère un JSON dans la console
+      - name: Install Gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks-linux-amd64 -o gitleaks
+          chmod +x gitleaks
+          sudo mv gitleaks /usr/local/bin/
+
+      - name: Run Gitleaks scan
+        run: gitleaks detect --source=. --report-format=json --report-path=gitleaks-report.json
         continue-on-error: true
 
-      - name: Save JSON report
-        run: echo "${{ steps.semgrep.outputs.stdout }}" > semgrep-results.json
-
-      - name: Upload Semgrep JSON report as artifact
+      - name: Upload Gitleaks JSON report
         uses: actions/upload-artifact@v4
         with:
-          name: semgrep-json-report
-          path: semgrep-results.json
+          name: gitleaks-json-report
+          path: gitleaks-report.json
