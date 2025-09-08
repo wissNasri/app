@@ -1,4 +1,4 @@
-name: React.js CI
+name: React.js CI + Semgrep
 
 on:
   pull_request: {}
@@ -16,6 +16,8 @@ jobs:
       matrix:
         node-version: [20.x]
         architecture: [x64]
+    container:
+      image: returntocorp/semgrep # Docker avec Semgrep pour tout le job
     steps:
       - name: Check-out git repository  
         uses: actions/checkout@v4
@@ -24,7 +26,6 @@ jobs:
         uses: actions/setup-node@v4
 
       - name: Install project dependencies 
-        working-directory: ./quiz-app
         run: |
           npm i
           npm run lint
@@ -36,4 +37,12 @@ jobs:
 
       - name: Build
         run: npm run build
-        working-directory: ./quiz-app
+
+      - name: Run Semgrep Analysis
+        run: semgrep scan -q --json --config auto ./quiz-app > semgrep-results.json
+
+      - name: Upload Semgrep JSON report
+        uses: actions/upload-artifact@v3
+        with:
+          name: semgrep-json-report
+          path: semgrep-results.json
