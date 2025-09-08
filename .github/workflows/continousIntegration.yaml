@@ -109,7 +109,7 @@ jobs:
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
 
       - name: Run Gitleaks scan and save JSON report
-        run: gitleaks detect --report-format=json --report-path=gitleaks-report.json
+        run: gitleaks detect --report-format=json --source=./quiz-app  --report-path=gitleaks-report.json
         continue-on-error: true
 
       - name: Upload Gitleaks JSON report as artifact
