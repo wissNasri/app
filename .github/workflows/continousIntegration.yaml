@@ -64,17 +64,15 @@ jobs:
           npm test
         env:
           CI: true 
+semgrep-scan:
+  runs-on: ubuntu-latest
+  steps:
+    - name: Check-out repository
+      uses: actions/checkout@v4
 
-  semgrep-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check-out repository
-        uses: actions/checkout@v4
+    - name: Run Semgrep scan on quiz-app
+      uses: returntocorp/semgrep-action@v1
+      with:
+        config: "auto"
+        args: "ci --json --output semgrep-report.json quiz-app"
 
-      - name: Run Semgrep scan on quiz-app
-        uses: returntocorp/semgrep-action@v1
-        with:
-          path: "quiz-app"
-          config: "auto"
-          format: "json"
-          output: "semgrep-report.json"
