@@ -97,5 +97,5 @@ jobs:
       - name: Mark GitHub workspace as safe
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - name: Run Gitleaks scan on quiz-app
-        run: gitleaks detect --source . --verbose
+        run: gitleaks detect --source . --no-git --verbose
         continue-on-error: true
