@@ -1,11 +1,11 @@
 name: Semgrep
 
 on:
-  pull_request: {}      # Scan des fichiers modifiés dans les PR
-  workflow_dispatch: {} # Lancement manuel possible
+  pull_request: {}      
+  workflow_dispatch: {} 
   push:
     branches:
-      - "main"          # Scan du code mergé sur main
+      - "main"          
 
 jobs:
   semgrep_scan:
@@ -20,5 +20,12 @@ jobs:
         uses: returntocorp/semgrep-action@v1
         with:
           config: auto
+          json: true                  # Génère un rapport JSON
+          output: semgrep-results.json
         continue-on-error: true
 
+      - name: Upload Semgrep JSON report as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: semgrep-json-report
+          path: semgrep-results.json
