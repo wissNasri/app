@@ -90,12 +90,12 @@ jobs:
       image: zricethezav/gitleaks:latest  # Docker image officielle de Gitleaks
     defaults:
       run:
-        working-directory: ./kubernetes-manifest
+        working-directory: ./quiz-app
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Mark GitHub workspace as safe
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - name: Run Gitleaks scan on quiz-app
-        run: gitleaks detect --source . 
+        run: gitleaks detect --source . --verbose
         continue-on-error: true
