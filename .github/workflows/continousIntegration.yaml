@@ -110,6 +110,48 @@ jobs:
         with:
           name: gitleaks-json-frontend-report
           path: ./quiz-app/gitleaks-report-frontend.json
+
+          
+    ### AJOUTÉ ### - Job d'analyse des dépendances pour le Frontend
+
+    
+  dependency-check-frontend:
+    needs: frontend-test # S'exécute après les tests du frontend
+    name: OWASP Dependency-Check (quiz-app)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: 'quiz-app/package-lock.json'
+
+      - name: Install dependencies for analysis
+        working-directory: ./quiz-app
+        run: npm install
+
+      - name: Run OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'quiz-app-frontend'
+          path: './quiz-app'
+          format: 'HTML'
+          out: 'reports-frontend'
+          args: >
+            --scan .
+            --enableExperimental
+          
+
+      - name: Upload Dependency-Check report
+        uses: actions/upload-artifact@v4
+        with:
+          name: owasp-dep-check-frontend-report
+          path: reports-frontend
+        
   ######
   semgrep-scan-backend:
     needs: backend-test
@@ -160,4 +202,39 @@ jobs:
           name: gitleaks-json-report
           path: ./backend/gitleaks-report-backend.json
   
+  dependency-check-backend:
+    needs: backend-test # S'exécute après les tests du backend
+    name: OWASP Dependency-Check (backend)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install dependencies for analysis
+        working-directory: ./backend
+        run: npm install
+
+      - name: Run OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'quiz-app-backend'
+          path: './backend'
+          format: 'HTML'
+          out: 'reports-backend'
+          args: >
+            --scan .
+            --enableExperimental
+         
+
+      - name: Upload Dependency-Check report
+        uses: actions/upload-artifact@v4
+        with:
+          name: owasp-dep-check-backend-report
+          path: reports-backend
