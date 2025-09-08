@@ -76,13 +76,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Semgrep scan (with JSON report)
-        run: semgrep scan --config auto . --json --output semgrep-report.json
+        run: semgrep scan --config auto . --json --output semgrep-report-frontend.json
 
       - name: Upload Semgrep JSON report
         uses: actions/upload-artifact@v4
         with:
           name: semgrep-json-report
-          path: ./quiz-app/semgrep-report.json
+          path: ./quiz-app/semgrep-report-frontend.json
 
   gitleaks-scan:
     needs: frontend-test
@@ -101,14 +101,14 @@ jobs:
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
   
       - name: Run Gitleaks scan on kubernetes-manifest
-        run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report.json
+        run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-frontend.json
         continue-on-error: true
   
       - name: Upload Gitleaks JSON report
         uses: actions/upload-artifact@v4
         with:
           name: gitleaks-json-report
-          path: ./quiz-app/gitleaks-report.json
+          path: ./quiz-app/gitleaks-report-frontend.json
   ######
   semgrep-scan-backend:
     needs: backend-test
