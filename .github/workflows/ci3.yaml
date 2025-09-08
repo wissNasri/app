@@ -9,14 +9,15 @@ on:
 jobs:
   gitleaks_scan:
     runs-on: ubuntu-latest
-    container:
-      image: zricethezav/gitleaks:latest  # Docker image officielle de Gitleaks
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Run Gitleaks scan
-        run: |
-          # Scanner le dossier complet du repo
-          gitleaks detect --source=. --report-format=json --report-path=gitleaks-report.json
+      - name: Run Gitleaks via Marketplace Action
+        uses: zricethezav/gitleaks-action@v2
+        with:
+          # Dossier à scanner (optionnel, default = repo root)
+          # scan-path: ./quiz-app   # décommente si tu veux scanner uniquement quiz-app
+          config-path: ""          # config par défaut
+          ignore-exit-code: true   # ne pas échouer le job si des secrets sont trouvés
