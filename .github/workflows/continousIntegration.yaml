@@ -76,17 +76,13 @@ jobs:
       run:
         working-directory: ./quiz-app
 
-    permissions:
-      actions: read
-      contents: read
-      security-events: write  # si tu veux uploader sur Security Dashboard
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Perform Semgrep Analysis and save JSON
-        run: semgrep scan -q --config auto --json --output semgrep-results.json
+        run: semgrep scan  --config auto --json --output semgrep-results.json
 
       - name: Upload Semgrep JSON report as artifact
         uses: actions/upload-artifact@v4
