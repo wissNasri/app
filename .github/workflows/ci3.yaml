@@ -1,40 +1,38 @@
 # Nom du workflow qui apparaîtra dans l'onglet "Actions" de GitHub
-name: Gitleaks Scan
+name: Gitleaks Security Scan
 
-# Déclencheurs du workflow
 on:
   push:
     branches:
-      - main # ou votre branche principale (ex: master)
+      - main
   pull_request:
     branches:
-      - main # ou votre branche principale
+      - main
 
 jobs:
   scan:
-    name: gitleaks
+    name: Gitleaks Scan
     runs-on: ubuntu-latest
     steps:
-      # Étape 1: Cloner le dépôt
+      # Étape 1: Cloner le dépôt avec l'historique complet
       - name: Checkout code
         uses: actions/checkout@v4
-
+        with:
+          fetch-depth: 0 # Crucial pour scanner tout l'historique
 
       # Étape 2: Exécuter l'action Gitleaks
+      # Cette action génère automatiquement un rapport nommé 'gitleaks.sarif'
       - name: Run Gitleaks Action
         uses: gitleaks/gitleaks-action@v2
-        env:
-          # Variable spéciale pour passer des arguments directement à la commande gitleaks
-          # On lui demande de générer un rapport JSON nommé 'gitleaks-report.json'
-          GITLEAKS_ARGS: '--report-path=gitleaks-report.json --report-format=json'
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true # La pipeline continue même si des fuites sont trouvées
+        # On ne met PAS 'continue-on-error: true' pour une sécurité maximale.
+        # Si vous voulez absolument que la pipeline continue, vous pouvez le remettre.
 
-      # Étape 3: Uploader le rapport Gitleaks en tant qu'artefact
-      - name: Upload Gitleaks JSON report
-        uses: actions/upload-artifact@v4
+      # Étape 3: Uploader le rapport SARIF vers l'onglet "Security" de GitHub
+      # Cette étape est cruciale pour l'intégration visuelle des alertes.
+      - name: Upload Gitleaks report to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          name: gitleaks-report-json # Nom de l'artefact
-          path: gitleaks-report.json # Chemin vers le fichier à uploader
-          retention-days: 5 # Optionnel: combien de temps garder l'artefact
+          # Le chemin vers le rapport SARIF généré par l'action Gitleaks.
+          # Par défaut, l'action gitleaks/gitleaks-action@v2 crée un fichier 'gitleaks.sarif'.
+          sarif_file: gitleaks.sarif
 
