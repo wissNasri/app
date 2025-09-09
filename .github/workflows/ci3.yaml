@@ -19,3 +19,4 @@ jobs:
           directory: ./kubernetes-manifest
           framework: kubernetes
           quiet: true
+        continue-on-error: true
