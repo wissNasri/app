@@ -18,8 +18,7 @@ jobs:
       # Étape 1: Cloner le dépôt
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Important pour scanner tout l'historique
+
 
       # Étape 2: Exécuter l'action Gitleaks
       - name: Run Gitleaks Action
