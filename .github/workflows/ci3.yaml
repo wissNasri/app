@@ -15,7 +15,7 @@ jobs:
 
       - name: Run Kubescape scan
         # CORRECTION 1: On utilise une version stable (@v3) au lieu de @main
-        uses: kubescape/github-action@v3
+        uses: kubescape/github-action@main
         # CORRECTION 2: On supprime 'continue-on-error: true'
         with:
           format: sarif
