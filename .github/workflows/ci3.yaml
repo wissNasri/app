@@ -1,21 +1,21 @@
-name: Security Scan with Gitleaks
+name: Checkov Scan
 
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
   pull_request:
-    branches: ["main"]
+    branches: [ "main" ]
 
 jobs:
-  gitleaks-scan:
-    name: Run Gitleaks Secret Scan
+  checkov:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2
+      - name: Run Checkov scan on Kubernetes manifests
+        uses: bridgecrewio/checkov-action@master
         with:
-          args: detect --source . --report-format=json --report-path=gitleaks-report.json
+          directory: ./kubernetes-manifest
+          framework: kubernetes
+          quiet: true
