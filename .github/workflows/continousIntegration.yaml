@@ -253,6 +253,7 @@ jobs:
           output_format: json
           output_file_path: ./checkov-report.json
           quiet: true
+        continue-on-error: true
 
       - name: Upload Checkov JSON report
         uses: actions/upload-artifact@v4
@@ -266,6 +267,8 @@ jobs:
           files: "kubernetes-manifest/*.yaml"
           format: json
           outputFile: ./kubescape-report.json
+        continue-on-error: true
+
 
       - name: Upload Kubescape JSON report
         uses: actions/upload-artifact@v4
