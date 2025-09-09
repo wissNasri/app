@@ -28,7 +28,7 @@ jobs:
 
       # Étape 2: Exécute Checkov et génère un rapport SARIF.
       - name: 'Lancer le scan Checkov'
-        uses: bridgecrewio/checkov-action@v12
+        uses: bridgecrewio/checkov-action@master
         with:
           # Le répertoire à scanner.
           directory: ./kubernetes-manifest
