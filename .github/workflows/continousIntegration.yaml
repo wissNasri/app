@@ -63,7 +63,7 @@ jobs:
         env:
           CI: true 
 
-  semgrep-scan:
+  semgrep-scan-frontend:
     needs: frontend-test
     name: Semgrep Analysis (quiz-app only)
     runs-on: ubuntu-latest
@@ -85,7 +85,7 @@ jobs:
           name: semgrep-json-frontend-report
           path: ./quiz-app/semgrep-report-frontend.json
 
-  gitleaks-scan:
+  gitleaks-scan-frontend:
     needs: frontend-test
     name: Gitleaks Analysis (quiz-app only)
     runs-on: ubuntu-latest
@@ -110,10 +110,6 @@ jobs:
         with:
           name: gitleaks-json-frontend-report
           path: ./quiz-app/gitleaks-report-frontend.json
-
-          
-    ### AJOUTÉ ### - Job d'analyse des dépendances pour le Frontend
-
     
   dependency-check-frontend:
     needs: frontend-test # S'exécute après les tests du frontend
@@ -241,3 +237,39 @@ jobs:
         with:
           name: owasp-dep-check-backend-report
           path: reports-backend
+
+  k8s-manifest-scan:
+    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Checkov scan (JSON report)
+        uses: bridgecrewio/checkov-action@master   
+        with:
+          directory: ./kubernetes-manifest
+          framework: kubernetes
+          output_format: json
+          output_file_path: ./checkov-report.json
+          quiet: true
+
+      - name: Upload Checkov JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-report
+          path: ./checkov-report.json
+
+      - name: Run Kubescape scan (JSON report)
+        uses: kubescape/github-action@main   
+        with:
+          files: "kubernetes-manifest/*.yaml"
+          format: json
+          outputFile: ./kubescape-report.json
+
+      - name: Upload Kubescape JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubescape-report
+          path: ./kubescape-report.json
+  
