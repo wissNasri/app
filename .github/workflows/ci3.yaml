@@ -1,53 +1,26 @@
-# Nom du workflow
-name: 'Analyse de Sécurité avec Kubescape (Installation Manuelle)'
+name: Kubescape scan (SARIF upload)
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
-  workflow_dispatch:
+    branches: ["main"]
+  push:
+    branches: ["main"]
 
 jobs:
-  kubescape-scan:
-    name: 'Scanner avec Kubescape et Uploader les Alertes'
+  kubescape:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      security-events: write
-
     steps:
-      # Étape 1: Récupérer le code source (inchangé)
-      - name: 'Récupérer le code source'
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ÉTAPE 2 (NOUVELLE): Installer Kubescape manuellement
-      # On utilise une commande 'run' pour télécharger et installer l'exécutable.
-      # Cela suppose que votre runner a un accès à 'curl' et 'github.com'.
-      - name: 'Installer Kubescape'
-        run: |
-          curl -s https://api.github.com/repos/kubescape/kubescape/releases/latest \
-          | grep "browser_download_url.*kubescape-ubuntu-latest" \
-          | cut -d '"' -f 4 \
-          | wget -qi -
-          sudo mv kubescape-ubuntu-latest /usr/local/bin/kubescape
-          sudo chmod +x /usr/local/bin/kubescape
-
-      # ÉTAPE 3 (MODIFIÉE ): Exécuter Kubescape manuellement
-      # Au lieu de 'uses:', on utilise 'run:' pour appeler l'exécutable qu'on vient d'installer.
-      - name: 'Lancer le scan Kubescape'
-        run: |
-          kubescape scan framework nsa,mitre --scan-cve ./kubernetes-manifest \
-          --format sarif --output results.sarif \
-          --fail-on-severity none
-
-      # Étape 4: Uploader le rapport SARIF (inchangé, mais crucial)
-      # On utilise la version v3 qui est la version stable et correcte.
-      - name: 'Uploader le rapport SARIF vers GitHub Security'
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
+      - name: Run Kubescape (generate SARIF)
+        uses: kubescape/github-action@main   # ⚠️ remplace @main par un tag/sha stable en prod
         with:
-          sarif_file: results.sarif
+          files: "kubernetes-manifest/*.yaml"
+          format: "sarif"
+          outputFile: "kubescape-results.sarif"
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: kubescape-results.sarif
