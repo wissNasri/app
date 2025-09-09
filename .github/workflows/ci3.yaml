@@ -1,38 +1,21 @@
-# Nom du workflow qui apparaîtra dans l'onglet "Actions" de GitHub
-name: Gitleaks Security Scan
+name: Security Scan with Gitleaks
 
 on:
   push:
-    branches:
-      - main
+    branches: ["main"]
   pull_request:
-    branches:
-      - main
+    branches: ["main"]
 
 jobs:
-  scan:
-    name: Gitleaks Scan
+  gitleaks-scan:
+    name: Run Gitleaks Secret Scan
     runs-on: ubuntu-latest
+
     steps:
-      # Étape 1: Cloner le dépôt avec l'historique complet
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Crucial pour scanner tout l'historique
 
-      # Étape 2: Exécuter l'action Gitleaks
-      # Cette action génère automatiquement un rapport nommé 'gitleaks.sarif'
-      - name: Run Gitleaks Action
+      - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
-        # On ne met PAS 'continue-on-error: true' pour une sécurité maximale.
-        # Si vous voulez absolument que la pipeline continue, vous pouvez le remettre.
-
-      # Étape 3: Uploader le rapport SARIF vers l'onglet "Security" de GitHub
-      # Cette étape est cruciale pour l'intégration visuelle des alertes.
-      - name: Upload Gitleaks report to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
         with:
-          # Le chemin vers le rapport SARIF généré par l'action Gitleaks.
-          # Par défaut, l'action gitleaks/gitleaks-action@v2 crée un fichier 'gitleaks.sarif'.
-          sarif_file: gitleaks.sarif
-
+          args: detect --source . --report-format=json --report-path=gitleaks-report.json
