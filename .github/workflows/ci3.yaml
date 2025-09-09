@@ -1,31 +1,59 @@
-name: Checkov Scan
+# Nom du workflow, visible dans l'onglet "Actions" de GitHub.
+name: 'Analyse de Sécurité IaC avec Checkov'
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "main" ]
+    # Il est recommandé de scanner aussi les Pull Requests
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  checkov:
+  scan-manifests:
+    name: 'Scanner les manifestes et Uploader vers l'onglet Sécurité'
     runs-on: ubuntu-latest
+
+    # NOUVEAU : Permissions requises pour l'upload vers l'onglet Sécurité
+    # L'action a besoin de la permission d'écrire les résultats de sécurité.
+    permissions:
+      security-events: write # Requis pour uploader les résultats SARIF
+
     steps:
-      - name: Checkout repository
+      # Étape 1: Récupère le code de votre dépôt.
+      - name: 'Récupérer le code source'
         uses: actions/checkout@v4
 
-      - name: Run Checkov scan (Marketplace action)
-        uses: bridgecrewio/checkov-action@master   # -> remplace @master par un tag/sha pour pinner
+      # Étape 2: Exécute Checkov et génère un rapport SARIF.
+      - name: 'Lancer le scan Checkov'
+        uses: bridgecrewio/checkov-action@v12
         with:
+          # Le répertoire à scanner.
           directory: ./kubernetes-manifest
+          
+          # Le framework à utiliser.
           framework: kubernetes
-          quiet: true
-          output_format: json
-          output_file_path: ./checkov-report.json
-        continue-on-error: true
+          
+          # NOUVEAU : Le format de sortie est maintenant 'sarif'.
+          output_format: sarif
+          
+          # NOUVEAU : Le nom du fichier de sortie SARIF.
+          output_file_path: checkov.sarif
+          
+          # IMPORTANT : Pour l'intégration SARIF, il ne faut PAS que le job échoue.
+          # L'échec du job empêcherait l'upload du rapport.
+          # On laisse GitHub gérer l'échec via les alertes de sécurité.
+          # On remplace donc 'soft_fail_on' par 'soft_fail: true'.
+          soft_fail: true
 
-
-      - name: Upload Checkov JSON report
-        uses: actions/upload-artifact@v4
+      # Étape 3: NOUVELLE ÉTAPE pour uploader le rapport SARIF vers l'onglet Sécurité.
+      - name: 'Uploader le rapport SARIF vers GitHub Security'
+        # On utilise l'action officielle de GitHub pour cela.
+        uses: github/codeql-action/upload-sarif@v3
+        # 'if: always()' garantit que l'upload a lieu même si Checkov trouve des problèmes.
+        if: always()
         with:
-          name: checkov-report
-          path: ./checkov-report.json
+          # Chemin vers le fichier SARIF généré par Checkov.
+          sarif_file: checkov.sarif
