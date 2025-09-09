@@ -43,7 +43,7 @@ jobs:
 
       # ÉTAPE CLÉ 3: Uploader le fichier SARIF généré.
       - name: 'Uploader le rapport SARIF vers GitHub Security'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         # On s'assure que cette étape s'exécute toujours.
         if: always()
         with:
