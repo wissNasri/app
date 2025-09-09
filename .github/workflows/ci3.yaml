@@ -1,5 +1,5 @@
 # Nom du workflow
-name: 'Analyse de Sécurité avec Kubescape'
+name: 'Analyse de Sécurité avec Kubescape (Installation Manuelle)'
 
 on:
   push:
@@ -20,22 +20,32 @@ jobs:
       security-events: write
 
     steps:
-      # Étape 1: Checkout du code - v4 est correct et existe.
+      # Étape 1: Récupérer le code source (inchangé)
       - name: 'Récupérer le code source'
         uses: actions/checkout@v4
 
-      # Étape 2: Lancer le scan Kubescape.
-      # La version stable est bien v3. L'erreur peut venir d'un problème de synchronisation
-      # sur votre GitHub Enterprise. On garde v3 car c'est la version correcte.
-      - name: 'Lancer le scan Kubescape'
-        uses: kubescape/github-action@v3
-        with:
-          format: 'sarif'
-          scanCommand: 'scan framework nsa,mitre --scan-cve ./kubernetes-manifest'
-          failOnSeverity: 'none'
+      # ÉTAPE 2 (NOUVELLE): Installer Kubescape manuellement
+      # On utilise une commande 'run' pour télécharger et installer l'exécutable.
+      # Cela suppose que votre runner a un accès à 'curl' et 'github.com'.
+      - name: 'Installer Kubescape'
+        run: |
+          curl -s https://api.github.com/repos/kubescape/kubescape/releases/latest \
+          | grep "browser_download_url.*kubescape-ubuntu-latest" \
+          | cut -d '"' -f 4 \
+          | wget -qi -
+          sudo mv kubescape-ubuntu-latest /usr/local/bin/kubescape
+          sudo chmod +x /usr/local/bin/kubescape
 
-      # Étape 3: Uploader le rapport SARIF.
-      # CORRECTION : La version stable de cette action est v3, pas v4.
+      # ÉTAPE 3 (MODIFIÉE ): Exécuter Kubescape manuellement
+      # Au lieu de 'uses:', on utilise 'run:' pour appeler l'exécutable qu'on vient d'installer.
+      - name: 'Lancer le scan Kubescape'
+        run: |
+          kubescape scan framework nsa,mitre --scan-cve ./kubernetes-manifest \
+          --format sarif --output results.sarif \
+          --fail-on-severity none
+
+      # Étape 4: Uploader le rapport SARIF (inchangé, mais crucial)
+      # On utilise la version v3 qui est la version stable et correcte.
       - name: 'Uploader le rapport SARIF vers GitHub Security'
         uses: github/codeql-action/upload-sarif@v3
         if: always()
