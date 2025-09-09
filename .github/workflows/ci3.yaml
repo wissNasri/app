@@ -10,14 +10,22 @@ jobs:
   checkov:
     runs-on: ubuntu-latest
     steps:
-    
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Checkov scan on Kubernetes manifests
-        uses: bridgecrewio/checkov-action@master
+      - name: Run Checkov scan (Marketplace action)
+        uses: bridgecrewio/checkov-action@master   # -> remplace @master par un tag/sha pour pinner
         with:
           directory: ./kubernetes-manifest
           framework: kubernetes
           quiet: true
+          output_format: json
+          output_file_path: ./checkov-report.json
         continue-on-error: true
+
+
+      - name: Upload Checkov JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-report
+          path: ./checkov-report.json
