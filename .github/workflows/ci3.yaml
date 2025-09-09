@@ -51,7 +51,7 @@ jobs:
       # Étape 3: NOUVELLE ÉTAPE pour uploader le rapport SARIF vers l'onglet Sécurité.
       - name: 'Uploader le rapport SARIF vers GitHub Security'
         # On utilise l'action officielle de GitHub pour cela.
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         # 'if: always()' garantit que l'upload a lieu même si Checkov trouve des problèmes.
         if: always()
         with:
