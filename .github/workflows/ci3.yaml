@@ -1,4 +1,4 @@
-name: Kubescape scan (logs only)
+name: Kubescape scan (SARIF upload)
 
 on:
   pull_request:
@@ -13,13 +13,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Kubescape (scan manifests, no upload)
-        # Remplace `@main` par un tag/sha pour pinner la version en prod si tu veux
-        uses: kubescape/github-action@main
+      - name: Run Kubescape (generate SARIF)
+        uses: kubescape/github-action@main   # ⚠️ remplace @main par un tag/sha stable en prod
         with:
-          # scanne uniquement les manifests dans ce dossier (relative à la racine du repo)
           files: "kubernetes-manifest/*.yaml"
-          # optionnel : choisis un/des frameworks (ou laisse vide pour utiliser le comportement par défaut)
-          frameworks: "nsa,mitre"
-          # ne génère pas de SARIF/JSON à uploader – les résultats apparaîtront dans les logs
-          format: "text"
+          format: "sarif"
+          outputFile: "kubescape-results.sarif"
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: kubescape-results.sarif
