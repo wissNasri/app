@@ -1,26 +1,51 @@
-name: Kubescape scan (SARIF upload)
+# Nom du workflow, visible dans l'onglet "Actions" de GitHub.
+name: 'Analyse de Sécurité avec Kubescape'
 
 on:
-  pull_request:
-    branches: ["main"]
   push:
-    branches: ["main"]
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  kubescape:
+  kubescape-scan:
+    name: 'Scanner avec Kubescape et Uploader les Alertes'
     runs-on: ubuntu-latest
+
+    # ÉTAPE CLÉ 1: Donner les permissions nécessaires.
+    # Le workflow a besoin de la permission d'écrire les résultats dans l'onglet Sécurité.
+    permissions:
+      contents: read          # Pour pouvoir lire le code (checkout).
+      security-events: write # Pour pouvoir écrire les alertes de sécurité (SARIF).
+
     steps:
-      - name: Checkout repository
+      # Étape 1: Récupérer le code source.
+      - name: 'Récupérer le code source'
         uses: actions/checkout@v4
 
-      - name: Run Kubescape (generate SARIF)
-        uses: kubescape/github-action@main   # ⚠️ remplace @main par un tag/sha stable en prod
+      # ÉTAPE CLÉ 2: Configurer Kubescape pour générer un rapport SARIF.
+      - name: 'Lancer le scan Kubescape'
+        uses: kubescape/github-action@v3
         with:
-          files: "kubernetes-manifest/*.yaml"
-          format: "sarif"
-          outputFile: "kubescape-results.sarif"
+          # On spécifie 'sarif' comme format de sortie.
+          # Le fichier de rapport se nommera 'results.sarif' par défaut.
+          format: 'sarif'
+          
+          # La commande de scan reste la même, complète et puissante.
+          scanCommand: 'scan framework nsa,mitre --scan-cve ./kubernetes-manifest'
+          
+          # Très important : on ne fait pas échouer le pipeline.
+          # Cela permet à l'étape d'upload de s'exécuter pour que vous puissiez voir les alertes.
+          failOnSeverity: 'none'
 
-      - name: Upload SARIF to GitHub Security tab
+      # ÉTAPE CLÉ 3: Uploader le fichier SARIF généré.
+      - name: 'Uploader le rapport SARIF vers GitHub Security'
         uses: github/codeql-action/upload-sarif@v3
+        # On s'assure que cette étape s'exécute toujours.
+        if: always()
         with:
-          sarif_file: kubescape-results.sarif
+          # On indique le chemin vers le fichier SARIF que Kubescape a créé.
+          sarif_file: results.sarif
