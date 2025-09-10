@@ -4,7 +4,7 @@ name: Kubescape Security Scan
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: []
 
 jobs:
   kubescape:
