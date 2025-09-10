@@ -6,12 +6,7 @@ on:
     branches:
       - main
 
-
-
 jobs:
-
-
-
   kubescape:
     runs-on: ubuntu-latest
     permissions:
@@ -21,18 +16,15 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - uses: kubescape/github-action@main
-      continue-on-error: true
+    - name: Run Kubescape scanner
+      uses: kubescape/github-action@main
+      continue-on-error: true # Important: Permet au workflow de continuer même si des vulnérabilités sont trouvées
       with:
         format: sarif
-        outputFile: results
-        # # Optional: Specify the Kubescape Portal credentials 
-        # account: ${{secrets.KUBESCAPE_ACCOUNT}}
-        # accessKey: ${{secrets.KUBESCAPE_ACCESS_KEY}}
-        # server: ${{ vars.KUBESCAPE_SERVER }}
-        # # Optional: Scan a specific path. Default will scan the whole repository
+        outputFile: results.sarif
         files: "./kubernetes-manifest"
+
     - name: Upload Kubescape scan results to Github Code Scanning
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3 # Mise à jour vers la v3
       with:
         sarif_file: results.sarif
