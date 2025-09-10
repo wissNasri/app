@@ -1,5 +1,6 @@
 name: Kubescape Security Scan
 
+
 on:
   pull_request:
   push:
