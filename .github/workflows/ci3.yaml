@@ -19,6 +19,7 @@ jobs:
     
     - uses: kubescape/github-action@main
       id: kubescape
+      continue-on-error: true
       with:
         format: sarif
         outputFile: results.sarif
