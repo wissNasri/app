@@ -1,33 +1,37 @@
-name: Kubescape scanning for misconfigurations
+name: IaC Security Scan (Checkov)
 
-on: 
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+
 
 jobs:
+
+
   kubescape:
     runs-on: ubuntu-latest
     permissions:
-      actions: read
       contents: read
       security-events: write
+      actions: read
 
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Run Kubescape scan
-        # CORRECTION 1: On utilise une version stable (@v3) au lieu de @main
-        uses: kubescape/github-action@main
-        # CORRECTION 2: On supprime 'continue-on-error: true'
-        with:
-          format: sarif
-          outputFile: results.sarif
-          # CORRECTION 3: On ajoute ce paramètre pour dire à Kubescape de ne pas échouer.
-          # Le pipeline continuera, et les "échecs" seront visibles dans l'onglet Sécurité.
-          failOnSeverity: 'none'
-
-      - name: Upload Kubescape scan results to GitHub Code Scanning
-        # CORRECTION 4: On utilise une version stable (@v3) pour l'action d'upload
-        uses: github/codeql-action/upload-sarif@main
-        # On ajoute 'if: always()' par sécurité, pour que l'upload se fasse toujours.
-        if: always()
-        with:
-          sarif_file: results.sarif
+    - uses: actions/checkout@v3
+    - uses: kubescape/github-action@main
+      continue-on-error: true
+      with:
+        format: sarif
+        outputFile: results
+        # # Optional: Specify the Kubescape Portal credentials 
+        # account: ${{secrets.KUBESCAPE_ACCOUNT}}
+        # accessKey: ${{secrets.KUBESCAPE_ACCESS_KEY}}
+        # server: ${{ vars.KUBESCAPE_SERVER }}
+        # # Optional: Scan a specific path. Default will scan the whole repository
+        files: "./kubernetes-manifest"
+    - name: Upload Kubescape scan results to Github Code Scanning
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: results.sarif
