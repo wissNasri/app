@@ -11,6 +11,7 @@ on:
 jobs:
 
 
+
   kubescape:
     runs-on: ubuntu-latest
     permissions:
