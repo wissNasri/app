@@ -1,4 +1,4 @@
-name: IaC Security Scan (Checkov)
+name: IaC Security Scan (Kubescape) # Nom clarifié
 
 on:
   pull_request:
@@ -16,15 +16,23 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+
     - name: Run Kubescape scanner
       uses: kubescape/github-action@main
-      continue-on-error: true # Important: Permet au workflow de continuer même si des vulnérabilités sont trouvées
+      continue-on-error: true
       with:
         format: sarif
-        outputFile: results.sarif
+        # Spécifiez le nom du fichier sans extension. L'action ajoutera .sarif
+        outputFile: results 
         files: "./kubernetes-manifest"
 
+    # Étape de débogage optionnelle mais recommandée
+    - name: Check for SARIF file
+      run: ls -l results.sarif
+      continue-on-error: true
+
     - name: Upload Kubescape scan results to Github Code Scanning
-      uses: github/codeql-action/upload-sarif@v3 # Mise à jour vers la v3
+      uses: github/codeql-action/upload-sarif@v3
       with:
+        # Assurez-vous que le nom ici correspond bien au fichier généré
         sarif_file: results.sarif
