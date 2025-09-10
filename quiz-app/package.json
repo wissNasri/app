@@ -31,7 +31,7 @@
     "eslint-plugin-react-refresh": "^0.4.5",
     "nodemon": "^3.1.0",
     "prettier": "^3.2.5",
-    "vite": "^5.1.4"
+    "vite": "^5.4.20"
   },
   "description": "This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.",
   "main": "vite.config.js",
