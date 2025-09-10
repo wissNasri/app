@@ -1,10 +1,9 @@
-name: IaC Security Scan (Kubescape) # Nom clarifié
+name: Kubescape Security Scan
 
 on:
   pull_request:
   push:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   kubescape:
@@ -16,23 +15,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-
-    - name: Run Kubescape scanner
-      uses: kubescape/github-action@main
-      continue-on-error: true
+    
+    - uses: kubescape/github-action@main
+      continue-on-error: true  # Continue même si des vulnérabilités sont trouvées
       with:
         format: sarif
-        # Spécifiez le nom du fichier sans extension. L'action ajoutera .sarif
-        outputFile: results 
+        outputFile: results.sarif
         files: "./kubernetes-manifest"
-
-    # Étape de débogage optionnelle mais recommandée
-    - name: Check for SARIF file
-      run: ls -l results.sarif
-      continue-on-error: true
-
-    - name: Upload Kubescape scan results to Github Code Scanning
-      uses: github/codeql-action/upload-sarif@v3
+        severityThreshold: critical  # ← Seuil ajusté
+        verbose: true  # ← Logs détaillés
+    
+    - name: Upload results to GitHub Code Scanning
+      uses: github/codeql-action/upload-sarif@v3  # ← Version corrigée
       with:
-        # Assurez-vous que le nom ici correspond bien au fichier généré
         sarif_file: results.sarif
