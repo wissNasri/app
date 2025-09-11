@@ -93,30 +93,35 @@ jobs:
       - name: 6. Push FRONTEND image to ECR
         run: docker push ${{ steps.build-frontend.outputs.image_uri }}
 
-      # ===================================================================
-      # MISE À JOUR DES MANIFESTES
-      # ===================================================================
+      # ... (étapes de build et push) ...
+
       - name: Update manifests and push to Git
         if: ${{ success() }}
         run: |
           git config --global user.name 'wissNasri'
           git config --global user.email 'wissemnasri81@gmail.com'
           
-          BACKEND_IMAGE_URI="${{ steps.build-backend.outputs.image_uri }}"
-          FRONTEND_IMAGE_URI="${{ steps.build-frontend.outputs.image_uri }}"
+          # Extraire le TAG de l'URI complet de l'image
+          BACKEND_IMAGE_TAG=$(echo "${{ steps.build-backend.outputs.image_uri }}" | cut -d':' -f2)
+          FRONTEND_IMAGE_TAG=$(echo "${{ steps.build-frontend.outputs.image_uri }}" | cut -d':' -f2)
           
-          if [ -z "$BACKEND_IMAGE_URI" ] || [ -z "$FRONTEND_IMAGE_URI" ]; then
-            echo "Error: Image URIs are empty. Aborting."
+          # --- FILET DE SÉCURITÉ ---
+          if [ -z "$BACKEND_IMAGE_TAG" ] || [ -z "$FRONTEND_IMAGE_TAG" ]; then
+            echo "Error: Image tags are empty. Aborting manifest update."
             exit 1
           fi
           
-          sed -i "s|image: .*|image: $BACKEND_IMAGE_URI|" kubernetes-manifest/backend.yaml
-          sed -i "s|image: .*|image: $FRONTEND_IMAGE_URI|" kubernetes-manifest/frontend.yaml
+          # Remplacer le marqueur par le nouveau tag
+          sed -i "s|IMAGE_TAG_PLACEHOLDER|$BACKEND_IMAGE_TAG|" kubernetes-manifest/backend.yaml
+          sed -i "s|IMAGE_TAG_PLACEHOLDER|$FRONTEND_IMAGE_TAG|" kubernetes-manifest/frontend.yaml
           
-          if git diff --staged --quiet; then
+          # Vérifier s'il y a des changements et faire le commit
+          # Note: git diff --staged ne fonctionnera pas ici, utilisez git diff --quiet
+          git add kubernetes-manifest/backend.yaml kubernetes-manifest/frontend.yaml
+          
+          if git diff --cached --quiet; then
             echo "No changes to commit."
           else
-            git add kubernetes-manifest/backend.yaml kubernetes-manifest/frontend.yaml
             git commit -m "ci: Update images to ${{ steps.vars.outputs.sha_short }}"
             git push
           fi
