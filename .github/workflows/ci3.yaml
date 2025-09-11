@@ -1,4 +1,3 @@
-# .github/workflows/backend-ci.yml
 
 name: CI - Build and Push Backend Image
 
@@ -11,8 +10,7 @@ on:
 
 env:
   AWS_REGION: "us-east-1"
-  # --- CORRECTION IMPORTANTE ---
-  # On utilise le nom du dépôt ECR qui existe réellement sur AWS.
+
   ECR_REPOSITORY_BACKEND: "iovision-repo" 
 
 jobs:
