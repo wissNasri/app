@@ -1,32 +1,48 @@
-name: Kubescape Security Scan
 
-
+name: CI - Build and Push Backend Image to ECR
 on:
-  pull_request:
   push:
-    branches: []
+    branches:
+      - main
+
+env:
+  AWS_REGION: "us-east-1"                     # Région AWS où se trouve votre ECR
+  ECR_REPOSITORY: "backend"                   # Nom de votre dépôt ECR pour le backend
+  # ---------------------------------
 
 jobs:
-  kubescape:
+  build-and-push-backend:
+    name: Build and Push Backend
     runs-on: ubuntu-latest
+
     permissions:
-      contents: read
-      security-events: write
-      actions: read
+      id-token: write   # Permet au workflow de demander un jeton OIDC
+      contents: read    # Permet de cloner le dépôt
 
     steps:
-    - uses: actions/checkout@v3
-    
-    - uses: kubescape/github-action@main
-      id: kubescape
-      continue-on-error: true
-      with:
-        format: sarif
-        outputFile: results.sarif
-        files: "./kubernetes-manifest"
-        verbose: true  # ← Logs détaillés
-    
-    - name: Upload results to GitHub Code Scanning
-      uses: github/codeql-action/upload-sarif@v3  # ← Version corrigée
-      with:
-        sarif_file: results.sarif
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+  
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+       
+          role-to-assume: arn:aws:iam::228578233417:role/oicd
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./backend
+
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+        
