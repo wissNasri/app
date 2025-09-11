@@ -5,6 +5,7 @@ const cors = require("cors"); // For handling cross-origin requests
 // const csrf = require('csurf'); // Import csurf
 // const cookieParser = require('cookie-parser'); // Import cookie-parser for CSRF token handling
 
+
 const app = express();
 const port = 3000;
 require("dotenv").config();
