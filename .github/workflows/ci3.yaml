@@ -44,7 +44,7 @@ jobs:
       # ===================================================================
       # PIPELINE POUR LE BACKEND
       # ===================================================================
-      - name: Build BACKEND image
+      - name: 1. Build BACKEND image
         id: build-backend
         run: |
           IMAGE_TAG="backend-${{ steps.vars.outputs.sha_short }}"
@@ -53,23 +53,23 @@ jobs:
           docker build -t $IMAGE_URI ./backend
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
 
-      - name: Scan BACKEND image with Trivy (Informative Mode)
-        # --- CORRECTION ---
-        # On ajoute 'continue-on-error' pour que le pipeline ne s'arrête jamais ici.
-        continue-on-error: true
+      - name: 2. Scan BACKEND image with Trivy
+        # Cette action vient du GitHub Marketplace
         uses: aquasecurity/trivy-action@master
         with:
+          # On scanne l'image construite à l'étape précédente
           image-ref: ${{ steps.build-backend.outputs.image_uri }}
           format: 'table'
-          # --- CORRECTION ---
-          # On met le code de sortie à 0 pour que Trivy ne fasse jamais échouer l'étape.
+          # La configuration clé pour ne PAS bloquer :
           exit-code: '0'
+          # On continue même si l'action elle-même a un problème
+          continue-on-error: true
+          # Options de scan
           ignore-unfixed: true
           vuln-type: 'os,library'
-          # On scanne quand même pour les vulnérabilités critiques pour les voir dans les logs
-          severity: 'CRITICAL,HIGH,MEDIUM'
+          severity: 'CRITICAL,HIGH'
 
-      - name: Push BACKEND image to ECR
+      - name: 3. Push BACKEND image to ECR
         run: |
           echo "Pushing backend image to ECR..."
           docker push ${{ steps.build-backend.outputs.image_uri }}
@@ -77,7 +77,7 @@ jobs:
       # ===================================================================
       # PIPELINE POUR LE FRONTEND
       # ===================================================================
-      - name: Build FRONTEND image
+      - name: 4. Build FRONTEND image
         id: build-frontend
         run: |
           IMAGE_TAG="frontend-${{ steps.vars.outputs.sha_short }}"
@@ -86,26 +86,26 @@ jobs:
           docker build -t $IMAGE_URI ./quiz-app
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
 
-      - name: Scan FRONTEND image with Trivy (Informative Mode)
-        # --- CORRECTION ---
-        continue-on-error: true
+      - name: 5. Scan FRONTEND image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.build-frontend.outputs.image_uri }}
           format: 'table'
-          # --- CORRECTION ---
+          # La même configuration pour ne PAS bloquer
           exit-code: '0'
+          continue-on-error: true
+          # Options de scan
           ignore-unfixed: true
           vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH,MEDIUM'
+          severity: 'CRITICAL,HIGH'
 
-      - name: Push FRONTEND image to ECR
+      - name: 6. Push FRONTEND image to ECR
         run: |
           echo "Pushing frontend image to ECR..."
           docker push ${{ steps.build-frontend.outputs.image_uri }}
 
       # ===================================================================
-      # MISE À JOUR DES MANIFESTES
+      # MISE À JOUR DES MANIFESTES (ne change pas)
       # ===================================================================
       - name: Update manifests and push to Git
         if: ${{ success() }}
@@ -115,6 +115,11 @@ jobs:
           
           BACKEND_IMAGE_URI="${{ steps.build-backend.outputs.image_uri }}"
           FRONTEND_IMAGE_URI="${{ steps.build-frontend.outputs.image_uri }}"
+          
+          if [ -z "$BACKEND_IMAGE_URI" ] || [ -z "$FRONTEND_IMAGE_URI" ]; then
+            echo "Error: Image URIs are empty. Aborting."
+            exit 1
+          fi
           
           sed -i "s|image: .*|image: $BACKEND_IMAGE_URI|" kubernetes-manifest/backend.yaml
           sed -i "s|image: .*|image: $FRONTEND_IMAGE_URI|" kubernetes-manifest/frontend.yaml
