@@ -64,7 +64,6 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
 
       - name: Push BACKEND image to ECR
         run: |
@@ -91,7 +90,6 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
 
       - name: Push FRONTEND image to ECR
         run: |
