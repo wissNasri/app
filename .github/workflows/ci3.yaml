@@ -1,48 +1,51 @@
+# .github/workflows/backend-ci.yml
 
-name: CI - Build and Push Backend Image to ECR
+name: CI - Build and Push Backend Image
+
 on:
   push:
     branches:
       - main
+    paths:
+      - 'backend/**'
 
 env:
-  AWS_REGION: "us-east-1"                     # Région AWS où se trouve votre ECR
-  ECR_REPOSITORY: "backend"                   # Nom de votre dépôt ECR pour le backend
-  # ---------------------------------
+  AWS_REGION: "us-east-1"
+  # --- CORRECTION IMPORTANTE ---
+  # On utilise le nom du dépôt ECR qui existe réellement sur AWS.
+  ECR_REPOSITORY_BACKEND: "iovision-repo" 
 
 jobs:
   build-and-push-backend:
-    name: Build and Push Backend
+    name: Build and Push Backend Image
     runs-on: ubuntu-latest
-
     permissions:
-      id-token: write   # Permet au workflow de demander un jeton OIDC
-      contents: read    # Permet de cloner le dépôt
+      id-token: write
+      contents: read
 
     steps:
+      # ... (les étapes checkout, configure-aws-credentials, login-ecr ne changent pas) ...
       - name: Checkout repository
         uses: actions/checkout@v4
 
-  
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-       
           role-to-assume: arn:aws:iam::228578233417:role/oicd
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Log in to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: actions/aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push image to Amazon ECR
-        id: build-image
+      # L'étape de build utilise maintenant la bonne variable
+      - name: Build, tag, and push backend image to ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./backend
+          
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG ./backend
 
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
-        
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG
+          
