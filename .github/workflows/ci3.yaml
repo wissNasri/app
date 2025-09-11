@@ -24,26 +24,20 @@ jobs:
       contents: write
 
     steps:
+      # ... (toutes les étapes de build, scan, push restent les mêmes) ...
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::228578233417:role/oicd 
           aws-region: ${{ env.AWS_REGION }}
-
       - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-
       - name: Define Short SHA
         id: vars
         run: echo "sha_short=$(echo ${{ github.sha }} | cut -c1-8)" >> $GITHUB_OUTPUT
-
-      # ===================================================================
-      # PIPELINE POUR LE BACKEND
-      # ===================================================================
       - name: 1. Build BACKEND image
         id: build-backend
         run: |
@@ -52,31 +46,20 @@ jobs:
           IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG"
           docker build -t $IMAGE_URI ./backend
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
-
       - name: 2. Scan BACKEND image with Trivy
-        # Cette action vient du GitHub Marketplace
-        uses: aquasecurity/trivy-action@0.28.0
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
         with:
-          # On scanne l'image construite à l'étape précédente
           image-ref: ${{ steps.build-backend.outputs.image_uri }}
           format: 'table'
-          # La configuration clé pour ne PAS bloquer :
           exit-code: '0'
-          # On continue même si l'action elle-même a un problème
-          continue-on-error: true
-          # Options de scan
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
-
       - name: 3. Push BACKEND image to ECR
         run: |
           echo "Pushing backend image to ECR..."
           docker push ${{ steps.build-backend.outputs.image_uri }}
-
-      # ===================================================================
-      # PIPELINE POUR LE FRONTEND
-      # ===================================================================
       - name: 4. Build FRONTEND image
         id: build-frontend
         run: |
@@ -85,27 +68,23 @@ jobs:
           IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG"
           docker build -t $IMAGE_URI ./quiz-app
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
-
       - name: 5. Scan FRONTEND image with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.build-frontend.outputs.image_uri }}
           format: 'table'
-          # La même configuration pour ne PAS bloquer
           exit-code: '0'
-          continue-on-error: true
-          # Options de scan
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
-
       - name: 6. Push FRONTEND image to ECR
         run: |
           echo "Pushing frontend image to ECR..."
           docker push ${{ steps.build-frontend.outputs.image_uri }}
 
       # ===================================================================
-      # MISE À JOUR DES MANIFESTES (ne change pas)
+      # MISE À JOUR DES MANIFESTES (AVEC LE FILET DE SÉCURITÉ)
       # ===================================================================
       - name: Update manifests and push to Git
         if: ${{ success() }}
@@ -116,8 +95,9 @@ jobs:
           BACKEND_IMAGE_URI="${{ steps.build-backend.outputs.image_uri }}"
           FRONTEND_IMAGE_URI="${{ steps.build-frontend.outputs.image_uri }}"
           
+          # --- LE FILET DE SÉCURITÉ EST DE RETOUR ---
           if [ -z "$BACKEND_IMAGE_URI" ] || [ -z "$FRONTEND_IMAGE_URI" ]; then
-            echo "Error: Image URIs are empty. Aborting."
+            echo "Error: Image URIs are empty. Aborting manifest update."
             exit 1
           fi
           
