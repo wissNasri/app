@@ -57,6 +57,8 @@ app.get("/api/questions", async (req, res) => {
 // // Modified route to include csrfProtection as middleware
 // app.post("/api/questions", csrfProtection, async (req, res) => { // Protect this route with CSRF - Line modified
 
+
+
 app.post("/api/questions", async (req, res) => {
   const question = new Question({
     question: req.body.question,
