@@ -101,9 +101,8 @@ jobs:
           git config --global user.name 'wissNasri'
           git config --global user.email 'wissemnasri81@gmail.com'
           
-          # Extraire le TAG de l'URI complet de l'image
-          BACKEND_IMAGE_TAG=$(echo "${{ steps.build-backend.outputs.image_uri }}" | cut -d':' -f2)
-          FRONTEND_IMAGE_TAG=$(echo "${{ steps.build-frontend.outputs.image_uri }}" | cut -d':' -f2)
+          BACKEND_IMAGE_TAG="backend-${{ steps.vars.outputs.sha_short }}"
+          FRONTEND_IMAGE_TAG="frontend-${{ steps.vars.outputs.sha_short }}"
           
           # --- FILET DE SÉCURITÉ ---
           if [ -z "$BACKEND_IMAGE_TAG" ] || [ -z "$FRONTEND_IMAGE_TAG" ]; then
@@ -111,12 +110,20 @@ jobs:
             exit 1
           fi
           
-          # Remplacer le marqueur par le nouveau tag
-          sed -i "s|IMAGE_TAG_PLACEHOLDER|$BACKEND_IMAGE_TAG|" kubernetes-manifest/backend.yaml
-          sed -i "s|IMAGE_TAG_PLACEHOLDER|$FRONTEND_IMAGE_TAG|" kubernetes-manifest/frontend.yaml
+          # ===================================================================
+          # LA CORRECTION EST ICI
+          # ===================================================================
+          # Commande sed robuste pour le backend :
+          # Trouve la ligne contenant "image: .*iovision-repo" et remplace tout ce qui suit les deux-points (:)
+          # par le nouveau tag.
+          sed -i "s|\(image: .*iovision-repo:\).*|\1$BACKEND_IMAGE_TAG|" kubernetes-manifest/backend.yaml
           
-          # Vérifier s'il y a des changements et faire le commit
-          # Note: git diff --staged ne fonctionnera pas ici, utilisez git diff --quiet
+          # Commande sed robuste pour le frontend :
+          # Trouve la ligne contenant "image: .*quiz-app-repo" et remplace tout ce qui suit les deux-points (:)
+          # par le nouveau tag.
+          sed -i "s|\(image: .*quiz-app-repo:\).*|\1$FRONTEND_IMAGE_TAG|" kubernetes-manifest/frontend.yaml
+          
+          # Le reste du script ne change pas
           git add kubernetes-manifest/backend.yaml kubernetes-manifest/frontend.yaml
           
           if git diff --cached --quiet; then
