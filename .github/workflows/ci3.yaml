@@ -48,7 +48,7 @@ jobs:
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
       - name: 2. Scan BACKEND image with Trivy
         continue-on-error: true
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ steps.build-backend.outputs.image_uri }}
           format: 'table'
@@ -70,7 +70,7 @@ jobs:
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
       - name: 5. Scan FRONTEND image with Trivy
         continue-on-error: true
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ steps.build-frontend.outputs.image_uri }}
           format: 'table'
