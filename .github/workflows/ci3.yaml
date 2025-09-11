@@ -1,5 +1,4 @@
 # .github/workflows/ci-cd.yml
-# Renommé pour refléter qu'il gère tout le CI/CD
 
 name: CI - Build, Push and Update All Services
 
@@ -7,17 +6,17 @@ on:
   push:
     branches:
       - main
-    # On se déclenche si le backend OU le frontend change
     paths:
       - 'backend/**'
       - 'quiz-app/**'
 
 env:
   AWS_REGION: "us-east-1"
-  # Dépôt ECR pour le backend
   ECR_REPOSITORY_BACKEND: "iovision-repo" 
-  # Dépôt ECR pour le frontend (assurez-vous qu'il existe)
-  ECR_REPOSITORY_FRONTEND: "iovision" 
+  # --- CORRECTION ---
+  # Utilisez un nom de dépôt dédié pour le frontend.
+  # Assurez-vous que ce dépôt "quiz-app-repo" existe bien sur ECR.
+  ECR_REPOSITORY_FRONTEND: "quiz-app-repo" 
 
 jobs:
   build-push-and-update:
@@ -28,9 +27,6 @@ jobs:
       contents: write
 
     steps:
-      # ===================================================================
-      # ÉTAPES COMMUNES
-      # ===================================================================
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -44,47 +40,44 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ===================================================================
-      # ÉTAPES POUR LE BACKEND
-      # ===================================================================
+      # --- BACKEND (ne change pas) ---
       - name: Build, tag, and push BACKEND image
         id: build-backend
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          # On utilise un tag lisible
-          IMAGE_TAG: backend-${{ github.sha_short }}
         run: |
+          IMAGE_TAG="backend-${{ github.sha_short }}"
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG ./backend
           docker push $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG
           echo "image_uri=$ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      # ===================================================================
-      # ÉTAPES POUR LE FRONTEND
-      # ===================================================================
+      # --- FRONTEND (corrigé) ---
       - name: Build, tag, and push FRONTEND image
         id: build-frontend
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          # On utilise un tag lisible
-          IMAGE_TAG: frontend-${{ github.sha_short }}
         run: |
-          # On utilise le bon dossier pour le build
+          IMAGE_TAG="frontend-${{ github.sha_short }}"
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          # La commande utilise maintenant la variable ECR_REPOSITORY_FRONTEND corrigée
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG ./quiz-app
           docker push $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG
           echo "image_uri=$ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      # ===================================================================
-      # ÉTAPE FINALE : MISE À JOUR DES MANIFESTES
-      # ===================================================================
+      # --- MISE À JOUR DES MANIFESTES (plus robuste) ---
       - name: Update manifests and push to Git
+        # --- AMÉLIORATION ---
+        # Cette condition garantit que l'étape ne s'exécute que si les deux builds ont réussi.
+        if: ${{ success() }}
         run: |
-          # On configure Git
-          git config --global user.name 'GitHub Actions Bot'
-          git config --global user.email 'github-actions-bot@github.com'
+          git config --global user.name 'wissNasri'
+          git config --global user.email 'wissemnasri81@gmail.com'
           
-          # On récupère les URIs des images des étapes précédentes
           BACKEND_IMAGE_URI="${{ steps.build-backend.outputs.image_uri }}"
           FRONTEND_IMAGE_URI="${{ steps.build-frontend.outputs.image_uri }}"
+          
+          # Vérification pour s'assurer que les URIs ne sont pas vides
+          if [ -z "$BACKEND_IMAGE_URI" ] || [ -z "$FRONTEND_IMAGE_URI" ]; then
+            echo "Error: One of the image URIs is empty. Aborting manifest update."
+            exit 1
+          fi
           
           echo "Updating backend.yaml with image: $BACKEND_IMAGE_URI"
           sed -i "s|image: .*|image: $BACKEND_IMAGE_URI|" kubernetes-manifest/backend.yaml
@@ -92,7 +85,6 @@ jobs:
           echo "Updating frontend.yaml with image: $FRONTEND_IMAGE_URI"
           sed -i "s|image: .*|image: $FRONTEND_IMAGE_URI|" kubernetes-manifest/frontend.yaml
           
-          # On publie les deux manifestes modifiés en un seul commit
           git add kubernetes-manifest/backend.yaml kubernetes-manifest/frontend.yaml
           git commit -m "ci: Update images for backend and frontend to ${{ github.sha_short }}"
           git push
