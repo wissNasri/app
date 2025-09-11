@@ -1,6 +1,6 @@
 # .github/workflows/ci-cd.yml
 
-name: CI - Build, Push and Update All Services
+name: CI - Security Scan, Build, Push and Update
 
 on:
   push:
@@ -16,8 +16,8 @@ env:
   ECR_REPOSITORY_FRONTEND: "quiz-app-repo" 
 
 jobs:
-  build-push-and-update:
-    name: Build, Push and Update Manifests
+  build-scan-push-and-update:
+    name: Build, Scan, Push and Update Manifests
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -37,34 +37,70 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # --- AMÉLIORATION : Définir le hash court de manière fiable ---
       - name: Define Short SHA
         id: vars
         run: echo "sha_short=$(echo ${{ github.sha }} | cut -c1-8)" >> $GITHUB_OUTPUT
 
-      # --- BACKEND ---
-      - name: Build, tag, and push BACKEND image
+      # ===================================================================
+      # PIPELINE POUR LE BACKEND
+      # ===================================================================
+      - name: Build BACKEND image
         id: build-backend
         run: |
-          # On utilise la variable de sortie de l'étape précédente
           IMAGE_TAG="backend-${{ steps.vars.outputs.sha_short }}"
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG ./backend
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG
-          echo "image_uri=$ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG"
+          docker build -t $IMAGE_URI ./backend
+          # On exporte l'URI pour les étapes suivantes
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
 
-      # --- FRONTEND ---
-      - name: Build, tag, and push FRONTEND image
+      - name: Scan BACKEND image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          # On scanne l'image que nous venons de construire localement
+          image-ref: ${{ steps.build-backend.outputs.image_uri }}
+          format: 'table'
+          # Fait échouer le pipeline si une vulnérabilité CRITICAL est trouvée
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Push BACKEND image to ECR
+        run: |
+          echo "Pushing backend image to ECR..."
+          docker push ${{ steps.build-backend.outputs.image_uri }}
+
+      # ===================================================================
+      # PIPELINE POUR LE FRONTEND
+      # ===================================================================
+      - name: Build FRONTEND image
         id: build-frontend
         run: |
-          # On utilise la même variable fiable
           IMAGE_TAG="frontend-${{ steps.vars.outputs.sha_short }}"
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG ./quiz-app
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG
-          echo "image_uri=$ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG"
+          docker build -t $IMAGE_URI ./quiz-app
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
 
-      # --- MISE À JOUR DES MANIFESTES ---
+      - name: Scan FRONTEND image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.build-frontend.outputs.image_uri }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Push FRONTEND image to ECR
+        run: |
+          echo "Pushing frontend image to ECR..."
+          docker push ${{ steps.build-frontend.outputs.image_uri }}
+
+      # ===================================================================
+      # MISE À JOUR DES MANIFESTES (ne s'exécute que si tout a réussi)
+      # ===================================================================
       - name: Update manifests and push to Git
         if: ${{ success() }}
         run: |
@@ -74,15 +110,9 @@ jobs:
           BACKEND_IMAGE_URI="${{ steps.build-backend.outputs.image_uri }}"
           FRONTEND_IMAGE_URI="${{ steps.build-frontend.outputs.image_uri }}"
           
-          if [ -z "$BACKEND_IMAGE_URI" ] || [ -z "$FRONTEND_IMAGE_URI" ]; then
-            echo "Error: Image URIs are empty. Aborting."
-            exit 1
-          fi
-          
           sed -i "s|image: .*|image: $BACKEND_IMAGE_URI|" kubernetes-manifest/backend.yaml
           sed -i "s|image: .*|image: $FRONTEND_IMAGE_URI|" kubernetes-manifest/frontend.yaml
           
-          # On ne commite que s'il y a des changements
           if git diff --staged --quiet; then
             echo "No changes to commit."
           else
