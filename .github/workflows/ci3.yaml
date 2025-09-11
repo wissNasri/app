@@ -6,10 +6,6 @@ on:
   push:
     branches:
       - main
-    # Important : On ne se déclenche que si le code du backend change.
-    # On ignore les changements de manifestes pour éviter les boucles.
-    paths:
-      - 'backend/**'
 
 env:
   AWS_REGION: "us-east-1"
