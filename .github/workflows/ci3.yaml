@@ -10,7 +10,6 @@ on:
 
 env:
   AWS_REGION: "us-east-1"
-
   ECR_REPOSITORY_BACKEND: "iovision-repo" 
 
 jobs:
@@ -36,7 +35,6 @@ jobs:
         id: login-ecr
         uses: actions/aws-actions/amazon-ecr-login@v2
 
-      # L'étape de build utilise maintenant la bonne variable
       - name: Build, tag, and push backend image to ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
