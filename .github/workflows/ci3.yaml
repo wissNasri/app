@@ -1,45 +1,75 @@
 # .github/workflows/backend-ci.yml
 
-name: CI - Build and Push Backend Image
+name: CI - Build, Push and Update Manifest
 
 on:
   push:
     branches:
       - main
-
+    # Important : On ne se déclenche que si le code du backend change.
+    # On ignore les changements de manifestes pour éviter les boucles.
+    paths:
+      - 'backend/**'
 
 env:
   AWS_REGION: "us-east-1"
   ECR_REPOSITORY_BACKEND: "iovision-repo" 
 
 jobs:
-  build-and-push-backend:
-    name: Build and Push Backend Image
+  build-push-and-update-manifest:
+    name: Build, Push and Update Manifest
     runs-on: ubuntu-latest
     permissions:
       id-token: write
-      contents: read
+      # On donne la permission d'écrire dans le dépôt pour commiter le manifeste
+      contents: write
 
     steps:
+      # Étape 1 : Récupérer le code
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Étape 2 : Configurer AWS (ne change pas)
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # Assurez-vous que le nom du rôle 'oicd' est bien celui créé par Terraform
           role-to-assume: arn:aws:iam::228578233417:role/oicd 
           aws-region: ${{ env.AWS_REGION }}
 
-      # --- CORRECTION APPLIQUÉE ICI ---
+      # Étape 3 : Se connecter à ECR (ne change pas)
       - name: Log in to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2 # Le chemin correct vers l'action
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push backend image to ECR
+      # Étape 4 : Construire et pousser l'image (légèrement modifié pour exporter l'URI)
+      - name: Build, tag, and push image
+        id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG ./backend
           docker push $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG
+          # On met l'URI complet de l'image en sortie pour l'utiliser plus tard
+          echo "image_uri=$ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      # Étape 5 : Mettre à jour le plan (le manifeste) et le publier
+      - name: Update manifest and push to Git
+        run: |
+          # On configure Git pour pouvoir commiter
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'github-actions-bot@github.com'
+          
+          # On récupère l'URI de l'image de l'étape précédente
+          NEW_IMAGE_URI="${{ steps.build-image.outputs.image_uri }}"
+          
+          echo "New image URI is: $NEW_IMAGE_URI"
+          echo "Updating backend.yaml..."
+          
+          # La commande magique qui remplace la ligne 'image:'
+          sed -i "s|image: .*|image: $NEW_IMAGE_URI|" kubernetes-manifest/backend.yaml
+          
+          # On publie le nouveau plan
+          git add kubernetes-manifest/backend.yaml
+          git commit -m "ci: Update backend image to ${{ github.sha }}"
+          git push
