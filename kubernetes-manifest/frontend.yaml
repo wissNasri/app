@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: ogochukwuozotta/frontend-js:latest
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/iovision:frontend-
         env:
         - name: VITE_REACT_APP_API_URL
           value: "http://quizapp.cloudcorehub.com/api/questions"
