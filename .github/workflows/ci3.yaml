@@ -55,7 +55,7 @@ jobs:
 
       - name: 2. Scan BACKEND image with Trivy
         # Cette action vient du GitHub Marketplace
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           # On scanne l'image construite à l'étape précédente
           image-ref: ${{ steps.build-backend.outputs.image_uri }}
@@ -87,7 +87,7 @@ jobs:
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
 
       - name: 5. Scan FRONTEND image with Trivy
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ steps.build-frontend.outputs.image_uri }}
           format: 'table'
