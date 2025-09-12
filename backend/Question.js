@@ -10,6 +10,7 @@ const questionSchema = new mongoose.Schema({
   ans: Number,
 });
 
+
 const Question = mongoose.model("Question", questionSchema);
 
 module.exports = Question;
