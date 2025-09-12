@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/quiz-app-repo:frontend-6cd0b27d
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/quiz-app-repo:frontend-14d86671
         envFrom:
         - configMapRef:
             name: quiz-app-config
