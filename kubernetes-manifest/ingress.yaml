@@ -4,11 +4,12 @@ metadata:
   name: quiz-app-ingress
   namespace: quiz
   annotations:
+    alb.ingress.kubernetes.io/group.name: iovision-app-lb
     kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     # Assurez-vous que cet ARN de certificat est correct et couvre quiz.iovision.site
-    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:876997124628:certificate/3fcfd586-3638-4997-9073-95d43d155430"
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:228578233417:certificate/cc1195ab-d9cd-4c2d-8f81-585fea51a766"
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
     alb.ingress.kubernetes.io/ssl-redirect: '443'
 spec:
