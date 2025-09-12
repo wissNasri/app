@@ -15,14 +15,17 @@ spec:
       labels:
         app: mongo
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        fsGroup: 999
       containers:
       - name: mongo
         image: mongo:4.4.6
-        imagePullPolicy: Always
         ports:
         - containerPort: 27017
         volumeMounts:
-        - name: mongo-volume
+        - name: mongo-storage
           mountPath: /data/db
         readinessProbe:
           tcpSocket:
@@ -34,10 +37,6 @@ spec:
             port: 27017
           initialDelaySeconds: 10
           periodSeconds: 15
-        securityContext:
-          allowPrivilegeEscalation: false
-          runAsNonRoot: true
-          runAsUser: 999 # utilisateur non-root pour Mongo
         resources:
           requests:
             cpu: "250m"
@@ -46,36 +45,9 @@ spec:
             cpu: "500m"
             memory: "1Gi"
       volumes:
-      - name: mongo-volume
+      - name: mongo-storage
         persistentVolumeClaim:
-          claimName: mongo-pvc
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: mongo-pv
-  namespace: quiz
-spec:
-  capacity: 
-    storage: 1Gi
-  volumeMode: Filesystem
-  accessModes:
-    - ReadWriteOnce
-  hostPath:
-    path: /data/db
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mongo-pvc
-  namespace: quiz
-spec: 
-  accessModes:  
-    - ReadWriteOnce
-  storageClassName: ""
-  resources:
-    requests:
-      storage: 2Gi
+          claimName: mongo-pvc-quiz
 ---    
 apiVersion: v1
 kind: Service
