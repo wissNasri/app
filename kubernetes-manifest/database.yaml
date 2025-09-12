@@ -1,3 +1,4 @@
+# 05-database.yaml (Version finale avec Init Container)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,6 +20,17 @@ spec:
         runAsNonRoot: true
         runAsUser: 999
         fsGroup: 999
+      
+      # --- LA SOLUTION EST ICI ---
+      initContainers:
+      - name: set-volume-permissions
+        image: busybox:1.36 # Une image linux minimale
+        # On exécute cette commande en tant que root pour avoir les droits
+        command: ["sh", "-c", "chown -R 999:999 /data/db"]
+        volumeMounts:
+        - name: mongo-storage
+          mountPath: /data/db
+      
       containers:
       - name: mongo
         image: mongo:4.4.6
@@ -40,10 +52,10 @@ spec:
         resources:
           requests:
             cpu: "250m"
-            memory: "256Mi"
+            memory: "256Mi" # On garde la version réduite qui a fonctionné
           limits:
             cpu: "500m"
-            memory: "512Gi"
+            memory: "512Mi"
       volumes:
       - name: mongo-storage
         persistentVolumeClaim:
