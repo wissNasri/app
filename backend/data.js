@@ -7,6 +7,7 @@ module.exports = {
       option3: "Jezebel",
       option4: "Rebecca",
       ans: 3,
+      
     },
     {
       question: "Who led the Israelites into the Promised Land?",
