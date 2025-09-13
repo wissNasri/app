@@ -378,7 +378,6 @@ jobs:
           fi
   k8s-manifest-scan:
     needs:  update-manifests
-    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
