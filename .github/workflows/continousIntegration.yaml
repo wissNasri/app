@@ -1,11 +1,18 @@
 name: React.js CI + Semgrep
 
 on:
-  pull_request: {}
   push:
     branches:
-    
-      - "master"
+      - main
+    paths:
+      - 'backend/**'
+      - 'quiz-app/**'
+      - 'kubernetes-manifest/**'
+
+env:
+  AWS_REGION: "us-east-1"
+  ECR_REPOSITORY_BACKEND: "iovision-repo"
+  ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
 
 jobs:
   frontend-test:
@@ -238,7 +245,139 @@ jobs:
           name: owasp-dep-check-backend-report
           path: reports-backend
 
+  build-backend:
+    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
+
+    name: "Build & Push: Backend"
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    outputs:
+      image_tag: ${{ steps.vars.outputs.image_tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::228578233417:role/oicd
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+
+      - name: Define Backend Image Tag
+        id: vars
+        run: |
+          SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
+          IMAGE_TAG="backend-${SHA_SHORT}"
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and Push Backend Image
+        id: build-image
+        run: |
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:${{ steps.vars.outputs.image_tag }}"
+          docker build -t $IMAGE_URI ./backend
+          docker push $IMAGE_URI
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+
+      - name: Scan BACKEND image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.build-image.outputs.image_uri }}
+          format: 'table'
+          exit-code: '0' # Important: mettre '1' pour bloquer le pipeline si des vulnérabilités sont trouvées
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+  # ===================================================================
+  # JOB 2: BUILD & PUSH FRONTEND
+  # ===================================================================
+  build-frontend: 
+    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
+
+    name: "Build & Push: Frontend"
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    outputs:
+      image_tag: ${{ steps.vars.outputs.image_tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::228578233417:role/oicd
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+
+      - name: Define Frontend Image Tag
+        id: vars
+        run: |
+          SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
+          IMAGE_TAG="frontend-${SHA_SHORT}"
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and Push Frontend Image
+        id: build-image
+        run: |
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:${{ steps.vars.outputs.image_tag }}"
+          docker build -t $IMAGE_URI ./quiz-app
+          docker push $IMAGE_URI
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+
+      - name: Scan FRONTEND image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.build-image.outputs.image_uri }}
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+  # ===================================================================
+  # JOB 3: UPDATE MANIFESTS
+  # ===================================================================
+  update-manifests:
+    name: "Deploy: Update Manifests for ArgoCD"
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend]
+    permissions:
+      contents: write
+
+    steps:
+      - name: "SOLUTION: Checkout repository to access files"
+        uses: actions/checkout@v4
+
+      - name: Update manifests and push to Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          BACKEND_TAG=${{ needs.build-backend.outputs.image_tag }}
+          FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
+          
+          if [ -z "$BACKEND_TAG" ] || [ -z "$FRONTEND_TAG" ]; then
+            echo "Error: Image tags from previous jobs are empty. Aborting."
+            exit 1
+          fi
+          
+          sed -i "s|\(image: .*iovision-repo:\).*|\1$BACKEND_TAG|" kubernetes-manifest/backend.yaml
+          sed -i "s|\(image: .*quiz-app-repo:\).*|\1$FRONTEND_TAG|" kubernetes-manifest/frontend.yaml
+          
+          git add kubernetes-manifest/backend.yaml kubernetes-manifest/frontend.yaml
+          
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            # SOLUTION: Définition de la variable pour le message de commit
+            COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
+            git commit -m "ci(deploy): Update image tags to ${COMMIT_SHA}"
+            git push
+          fi
   k8s-manifest-scan:
+    needs:  update-manifests
     needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
     runs-on: ubuntu-latest
     steps:
