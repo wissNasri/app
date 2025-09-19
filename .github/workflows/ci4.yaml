@@ -50,18 +50,12 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.frontend_changed == 'true'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./quiz-app
-    strategy:
-      matrix:
-        node-version: [20.x]
-        architecture: [x64]
+    defaults: { run: { working-directory: ./quiz-app } }
+    strategy: { matrix: { node-version: [20.x], architecture: [x64] } }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
+        with: { node-version: '${{ matrix.node-version }}' }
       - name: Install, Lint, Test
         run: |
           npm i
@@ -69,8 +63,7 @@ jobs:
           npm install --save-dev --save-exact prettier
           npm run prettier
           npm test
-        env:
-          CI: true 
+        env: { CI: true }
       - name: Build
         run: npm run build
 
@@ -79,38 +72,28 @@ jobs:
     if: needs.check-changes.outputs.frontend_changed == 'true'
     name: Semgrep Analysis (quiz-app)
     runs-on: ubuntu-latest
-    container:
-      image: returntocorp/semgrep
-    defaults:
-      run:
-        working-directory: ./quiz-app
+    container: { image: returntocorp/semgrep }
+    defaults: { run: { working-directory: ./quiz-app } }
     steps:
       - uses: actions/checkout@v4
       - run: semgrep scan --config auto . --json --output semgrep-report-frontend.json
       - uses: actions/upload-artifact@v4
-        with:
-          name: semgrep-json-frontend-report
-          path: ./quiz-app/semgrep-report-frontend.json
+        with: { name: semgrep-json-frontend-report, path: ./quiz-app/semgrep-report-frontend.json }
 
   gitleaks-scan-frontend:
     needs: check-changes
     if: needs.check-changes.outputs.frontend_changed == 'true'
     name: Gitleaks Analysis (quiz-app)
     runs-on: ubuntu-latest
-    container:
-      image: zricethezav/gitleaks:latest
-    defaults:
-      run:
-        working-directory: ./quiz-app
+    container: { image: zricethezav/gitleaks:latest }
+    defaults: { run: { working-directory: ./quiz-app } }
     steps:
       - uses: actions/checkout@v4
       - run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-frontend.json
         continue-on-error: true
       - uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-json-frontend-report
-          path: ./quiz-app/gitleaks-report-frontend.json
+        with: { name: gitleaks-json-frontend-report, path: ./quiz-app/gitleaks-report-frontend.json }
     
   dependency-check-frontend:
     needs: check-changes
@@ -120,25 +103,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: '20.x'
-          cache: 'npm'
-          cache-dependency-path: 'quiz-app/package-lock.json'
+        with: { node-version: '20.x', cache: 'npm', cache-dependency-path: 'quiz-app/package-lock.json' }
       - run: npm install
         working-directory: ./quiz-app
       - uses: dependency-check/Dependency-Check_Action@main
-        with:
-          project: 'quiz-app-frontend'
-          path: './quiz-app'
-          format: 'HTML'
-          out: 'reports-frontend'
-          args: >
-            --scan .
-            --enableExperimental
+        with: { project: 'quiz-app-frontend', path: './quiz-app', format: 'HTML', out: 'reports-frontend', args: '--scan . --enableExperimental' }
       - uses: actions/upload-artifact@v4
-        with:
-          name: owasp-dep-check-frontend-report
-          path: reports-frontend
+        with: { name: owasp-dep-check-frontend-report, path: reports-frontend }
         
   # ===================================================================
   # PISTE BACKEND : TOUS LES JOBS S'EXÉCUTENT EN PARALLÈLE
@@ -147,18 +118,12 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.backend_changed == 'true'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./backend
-    strategy:
-      matrix:
-        node-version: [20.x]
-        architecture: [x64]
+    defaults: { run: { working-directory: ./backend } }
+    strategy: { matrix: { node-version: [20.x], architecture: [x64] } }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
+        with: { node-version: '${{ matrix.node-version }}' }
       - name: Install, Lint, Test
         run: |
           npm i
@@ -166,46 +131,35 @@ jobs:
           npm install --save-dev --save-exact prettier
           npm run prettier
           npm test
-        env:
-          CI: true 
+        env: { CI: true }
 
   semgrep-scan-backend:
     needs: check-changes
     if: needs.check-changes.outputs.backend_changed == 'true'
     name: Semgrep Analysis (backend)
     runs-on: ubuntu-latest
-    container:
-      image: returntocorp/semgrep
-    defaults:
-      run:
-        working-directory: ./backend
+    container: { image: returntocorp/semgrep }
+    defaults: { run: { working-directory: ./backend } }
     steps:
       - uses: actions/checkout@v4
       - run: semgrep scan --config auto . --json --output semgrep-report-backend.json
       - uses: actions/upload-artifact@v4
-        with:
-          name: semgrep-json-backend-report
-          path: ./backend/semgrep-report-backend.json
+        with: { name: semgrep-json-backend-report, path: ./backend/semgrep-report-backend.json }
 
   gitleaks-scan-backend:
     needs: check-changes
     if: needs.check-changes.outputs.backend_changed == 'true'
     name: Gitleaks Analysis (backend)
     runs-on: ubuntu-latest
-    container:
-      image: zricethezav/gitleaks:latest
-    defaults:
-      run:
-        working-directory: ./backend
+    container: { image: zricethezav/gitleaks:latest }
+    defaults: { run: { working-directory: ./backend } }
     steps:
       - uses: actions/checkout@v4
       - run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-backend.json
         continue-on-error: true
       - uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-json-backend-report
-          path: ./backend/gitleaks-report-backend.json
+        with: { name: gitleaks-json-backend-report, path: ./backend/gitleaks-report-backend.json }
   
   dependency-check-backend:
     needs: check-changes
@@ -215,25 +169,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: '20.x'
-          cache: 'npm'
-          cache-dependency-path: 'backend/package-lock.json'
+        with: { node-version: '20.x', cache: 'npm', cache-dependency-path: 'backend/package-lock.json' }
       - run: npm install
         working-directory: ./backend
       - uses: dependency-check/Dependency-Check_Action@main
-        with:
-          project: 'quiz-app-backend'
-          path: './backend'
-          format: 'HTML'
-          out: 'reports-backend'
-          args: >
-            --scan .
-            --enableExperimental
+        with: { project: 'quiz-app-backend', path: './backend', format: 'HTML', out: 'reports-backend', args: '--scan . --enableExperimental' }
       - uses: actions/upload-artifact@v4
-        with:
-          name: owasp-dep-check-backend-report
-          path: reports-backend
+        with: { name: owasp-dep-check-backend-report, path: reports-backend }
 
   # ===================================================================
   # JOBS DE BUILD (ATTENDENT LA FIN DE LEUR PISTE RESPECTIVE)
@@ -243,16 +185,12 @@ jobs:
     needs: [backend-test, semgrep-scan-backend, gitleaks-scan-backend, dependency-check-backend]
     if: always() && needs.backend-test.result != 'skipped'
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    outputs:
-      image_tag_backend: ${{ steps.vars-backend.outputs.image_tag }}
+    permissions: { id-token: write }
+    outputs: { image_tag_backend: '${{ steps.vars-backend.outputs.image_tag }}' }
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::228578233417:role/oicd
-          aws-region: ${{ env.AWS_REGION }}
+        with: { role-to-assume: 'arn:aws:iam::228578233417:role/oicd', aws-region: '${{ env.AWS_REGION }}' }
       - uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
       - name: Define Backend Image Tag
@@ -268,28 +206,19 @@ jobs:
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
       - name: Scan BACKEND image with Trivy
         uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: ${{ steps.build-image-backend.outputs.image_uri }}
-          format: 'table'
-          exit-code: '0'
-          ignore-unfixed: true
-          severity: 'CRITICAL,HIGH'
+        with: { image-ref: '${{ steps.build-image-backend.outputs.image_uri }}', format: 'table', exit-code: '0', ignore-unfixed: true, severity: 'CRITICAL,HIGH' }
 
   build-populate:
     name: "Build & Push: Populate"
     needs: [backend-test, semgrep-scan-backend, gitleaks-scan-backend, dependency-check-backend]
     if: always() && needs.backend-test.result != 'skipped'
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    outputs:
-      image_tag_populate: ${{ steps.vars-populate.outputs.image_tag }}
+    permissions: { id-token: write }
+    outputs: { image_tag_populate: '${{ steps.vars-populate.outputs.image_tag }}' }
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::228578233417:role/oicd
-          aws-region: ${{ env.AWS_REGION }}
+        with: { role-to-assume: 'arn:aws:iam::228578233417:role/oicd', aws-region: '${{ env.AWS_REGION }}' }
       - uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
       - name: Define Populate Image Tag
@@ -305,28 +234,19 @@ jobs:
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
       - name: Scan POPULATE image with Trivy
         uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: ${{ steps.build-image-populate.outputs.image_uri }}
-          format: 'table'
-          exit-code: '0'
-          ignore-unfixed: true
-          severity: 'CRITICAL,HIGH'
+        with: { image-ref: '${{ steps.build-image-populate.outputs.image_uri }}', format: 'table', exit-code: '0', ignore-unfixed: true, severity: 'CRITICAL,HIGH' }
 
   build-frontend: 
     name: "Build & Push: Frontend"
     needs: [frontend-test, semgrep-scan-frontend, gitleaks-scan-frontend, dependency-check-frontend]
     if: always() && needs.frontend-test.result != 'skipped'
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    outputs:
-      image_tag: ${{ steps.vars.outputs.image_tag }}
+    permissions: { id-token: write }
+    outputs: { image_tag: '${{ steps.vars.outputs.image_tag }}' }
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::228578233417:role/oicd
-          aws-region: ${{ env.AWS_REGION }}
+        with: { role-to-assume: 'arn:aws:iam::228578233417:role/oicd', aws-region: '${{ env.AWS_REGION }}' }
       - uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
       - name: Define Frontend Image Tag
@@ -342,12 +262,7 @@ jobs:
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
       - name: Scan FRONTEND image with Trivy
         uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: ${{ steps.build-image.outputs.image_uri }}
-          format: 'table'
-          exit-code: '0'
-          ignore-unfixed: true
-          severity: 'CRITICAL,HIGH'
+        with: { image-ref: '${{ steps.build-image.outputs.image_uri }}', format: 'table', exit-code: '0', ignore-unfixed: true, severity: 'CRITICAL,HIGH' }
 
   # ===================================================================
   # JOB DE SYNCHRONISATION ET DE DÉPLOIEMENT
@@ -357,8 +272,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [check-changes, build-backend, build-frontend, build-populate]
     if: always() && (needs.build-backend.result == 'success' || needs.build-frontend.result == 'success' || needs.build-populate.result == 'success' || needs.check-changes.outputs.manifests_changed == 'true')
-    permissions:
-      contents: write
+    permissions: { contents: write }
     steps:
       - uses: actions/checkout@v4
       - name: Update manifests and push to Git
@@ -400,44 +314,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: bridgecrewio/checkov-action@master   
-        with:
-          directory: ./kubernetes-manifest
-          framework: kubernetes
-          output_format: json
-          output_file_path: ./checkov-report.json
-          quiet: true
-          continue-on-error: true
+        with: { directory: ./kubernetes-manifest, framework: kubernetes, output_format: json, output_file_path: ./checkov-report.json, quiet: true, continue-on-error: true }
       - uses: actions/upload-artifact@v4
-        with:
-          name: checkov-report
-          path: ./checkov-report.json
+        with: { name: checkov-report, path: ./checkov-report.json }
       - uses: kubescape/github-action@main   
-        with:
-          files: "kubernetes-manifest/*.yaml"
-          format: json
-          outputFile: ./kubescape-report.json
-        continue-on-error: true
+        with: { files: "kubernetes-manifest/*.yaml", format: json, outputFile: ./kubescape-report.json, continue-on-error: true }
       - uses: actions/upload-artifact@v4
-        with:
-          name: kubescape-report
-          path: ./kubescape-report.json
+        with: { name: kubescape-report, path: ./kubescape-report.json }
 
   gitleaks-scan-manifests:
     needs: update-manifests
     if: always() && needs.update-manifests.result == 'success'
     name: Gitleaks Analysis (kubernetes-manifest)
     runs-on: ubuntu-latest
-    container:
-      image: zricethezav/gitleaks:latest
-    defaults:
-      run:
-        working-directory: ./kubernetes-manifest
+    container: { image: zricethezav/gitleaks:latest }
+    defaults: { run: { working-directory: ./kubernetes-manifest } }
     steps:
       - uses: actions/checkout@v4
       - run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-manifests.json
         continue-on-error: true
       - uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-json-manifests-report
-          path: ./kubernetes-manifest/gitleaks-report-manifests.json
+        with: { name: gitleaks-json-manifests-report, path: ./kubernetes-manifest/gitleaks-report-manifests.json }
