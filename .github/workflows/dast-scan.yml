@@ -58,12 +58,12 @@ jobs:
         run: |
           mkdir -p zap-reports
           
-          # On exécute la commande docker run avec l'option -u pour spécifier l'utilisateur.
-          # $(id -u ):$(id -g) passe l'ID de l'utilisateur et du groupe du runner actuel.
+          # On exécute la commande docker run avec les options finales
           docker run \
             --network=host \
-            -v $(pwd)/zap-reports:/zap/wrk/:rw \
+            -v $(pwd )/zap-reports:/zap/wrk/:rw \
             -u $(id -u):$(id -g) \
+            -e "HOME=/zap/wrk/" \
             ${{ env.ZAP_IMAGE }} \
             zap-full-scan.py \
               -t http://localhost:8080/ \
