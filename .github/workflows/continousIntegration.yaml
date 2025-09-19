@@ -13,8 +13,12 @@ env:
   AWS_REGION: "us-east-1"
   ECR_REPOSITORY_BACKEND: "iovision-repo"
   ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
+  ECR_REPOSITORY_POPULATE: "populate-repo" # NOUVEAU : Variable pour le nouveau dépôt ECR
 
 jobs:
+  # ===================================================================
+  # JOBS DE TESTS ET D'ANALYSE STATIQUE (INCHANGÉS)
+  # ===================================================================
   frontend-test:
     runs-on: ubuntu-latest
     defaults:
@@ -27,10 +31,8 @@ jobs:
     steps:
       - name: Check-out git repository  
         uses: actions/checkout@v4
-
       - name: USE NODEJS ${{ matrix.node-version }} - ${{ matrix.architecture }}
         uses: actions/setup-node@v4
-
       - name: Install project dependencies 
         run: |
           npm i
@@ -40,7 +42,6 @@ jobs:
           npm test
         env:
           CI: true 
-
       - name: Build
         run: npm run build
 
@@ -56,10 +57,8 @@ jobs:
     steps:
       - name: Check-out git repository  
         uses: actions/checkout@v4
-
       - name: USE NODEJS ${{ matrix.node-version }} - ${{ matrix.architecture }}
         uses: actions/setup-node@v4
-
       - name: Install project dependencies 
         run: |
           npm i
@@ -82,10 +81,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Run Semgrep scan (with JSON report)
         run: semgrep scan --config auto . --json --output semgrep-report-frontend.json
-
       - name: Upload Semgrep JSON report
         uses: actions/upload-artifact@v4
         with:
@@ -97,21 +94,18 @@ jobs:
     name: Gitleaks Analysis (quiz-app only)
     runs-on: ubuntu-latest
     container:
-      image: zricethezav/gitleaks:latest  # Docker image officielle de Gitleaks
+      image: zricethezav/gitleaks:latest
     defaults:
       run:
         working-directory: ./quiz-app
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-  
       - name: Mark GitHub workspace as safe
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
-  
-      - name: Run Gitleaks scan on kubernetes-manifest
+      - name: Run Gitleaks scan on quiz-app
         run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-frontend.json
         continue-on-error: true
-  
       - name: Upload Gitleaks JSON report
         uses: actions/upload-artifact@v4
         with:
@@ -119,24 +113,21 @@ jobs:
           path: ./quiz-app/gitleaks-report-frontend.json
     
   dependency-check-frontend:
-    needs: frontend-test # S'exécute après les tests du frontend
+    needs: frontend-test
     name: OWASP Dependency-Check (quiz-app)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
           cache: 'npm'
           cache-dependency-path: 'quiz-app/package-lock.json'
-
       - name: Install dependencies for analysis
         working-directory: ./quiz-app
         run: npm install
-
       - name: Run OWASP Dependency-Check
         uses: dependency-check/Dependency-Check_Action@main
         with:
@@ -147,15 +138,12 @@ jobs:
           args: >
             --scan .
             --enableExperimental
-          
-
       - name: Upload Dependency-Check report
         uses: actions/upload-artifact@v4
         with:
           name: owasp-dep-check-frontend-report
           path: reports-frontend
         
-  ######
   semgrep-scan-backend:
     needs: backend-test
     name: Semgrep Analysis 
@@ -168,10 +156,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Run Semgrep scan 
         run: semgrep scan --config auto . --json --output semgrep-report-backend.json
-
       - name: Upload Semgrep JSON report
         uses: actions/upload-artifact@v4
         with:
@@ -183,22 +169,18 @@ jobs:
     name: Gitleaks Analysis 
     runs-on: ubuntu-latest
     container:
-      image: zricethezav/gitleaks:latest  # Docker image officielle de Gitleaks
+      image: zricethezav/gitleaks:latest
     defaults:
       run:
         working-directory: ./backend
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-  
       - name: Mark GitHub workspace as safe
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
-  
-      - name: Run Gitleaks scan on kubernetes-manifest
+      - name: Run Gitleaks scan on backend
         run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-backend.json
-  
         continue-on-error: true
-  
       - name: Upload Gitleaks JSON report
         uses: actions/upload-artifact@v4
         with:
@@ -206,7 +188,7 @@ jobs:
           path: ./backend/gitleaks-report-backend.json
   
   dependency-check-backend:
-    needs: backend-test # S'exécute après les tests du backend
+    needs: backend-test
     name: OWASP Dependency-Check (backend)
     runs-on: ubuntu-latest
     defaults:
@@ -215,18 +197,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
           cache: 'npm'
           cache-dependency-path: 'backend/package-lock.json'
-
       - name: Install dependencies for analysis
         working-directory: ./backend
         run: npm install
-
       - name: Run OWASP Dependency-Check
         uses: dependency-check/Dependency-Check_Action@main
         with:
@@ -237,23 +216,24 @@ jobs:
           args: >
             --scan .
             --enableExperimental
-         
-
       - name: Upload Dependency-Check report
         uses: actions/upload-artifact@v4
         with:
           name: owasp-dep-check-backend-report
           path: reports-backend
 
+  # ===================================================================
+  # JOB MODIFIÉ : BUILD & PUSH BACKEND + POPULATE
+  # ===================================================================
   build-backend:
     needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
-
-    name: "Build & Push: Backend"
+    name: "Build & Push: Backend & Populate" # MODIFIÉ : Titre du job
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     outputs:
-      image_tag: ${{ steps.vars.outputs.image_tag }}
+      image_tag_backend: ${{ steps.vars-backend.outputs.image_tag }} # MODIFIÉ : Nom de l'output
+      image_tag_populate: ${{ steps.vars-populate.outputs.image_tag }} # NOUVEAU : Output pour l'image populate
 
     steps:
       - uses: actions/checkout@v4
@@ -265,17 +245,17 @@ jobs:
         id: login-ecr
 
       - name: Define Backend Image Tag
-        id: vars
+        id: vars-backend # MODIFIÉ : ID de l'étape
         run: |
           SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
           IMAGE_TAG="backend-${SHA_SHORT}"
           echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
 
       - name: Build and Push Backend Image
-        id: build-image
+        id: build-image-backend # MODIFIÉ : ID de l'étape
         run: |
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:${{ steps.vars.outputs.image_tag }}"
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:${{ steps.vars-backend.outputs.image_tag }}"
           docker build -t $IMAGE_URI ./backend
           docker push $IMAGE_URI
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
@@ -283,25 +263,49 @@ jobs:
       - name: Scan BACKEND image with Trivy
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: ${{ steps.build-image.outputs.image_uri }}
+          image-ref: ${{ steps.build-image-backend.outputs.image_uri }}
           format: 'table'
-          exit-code: '0' # Important: mettre '1' pour bloquer le pipeline si des vulnérabilités sont trouvées
+          exit-code: '0'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+      # --- NOUVEAU : Étapes pour l'image populate ---
+      - name: Define Populate Image Tag
+        id: vars-populate
+        run: |
+          SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
+          IMAGE_TAG="populate-${SHA_SHORT}"
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and Push Populate Image
+        id: build-image-populate
+        run: |
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_POPULATE:${{ steps.vars-populate.outputs.image_tag }}"
+          docker build -t $IMAGE_URI -f ./backend/Dockerfile.populate ./backend
+          docker push $IMAGE_URI
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+
+      - name: Scan POPULATE image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.build-image-populate.outputs.image_uri }}
+          format: 'table'
+          exit-code: '0'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
   # ===================================================================
-  # JOB 2: BUILD & PUSH FRONTEND
+  # JOB 2: BUILD & PUSH FRONTEND (INCHANGÉ)
   # ===================================================================
   build-frontend: 
     needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
-
     name: "Build & Push: Frontend"
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     outputs:
       image_tag: ${{ steps.vars.outputs.image_tag }}
-
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -310,14 +314,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
-
       - name: Define Frontend Image Tag
         id: vars
         run: |
           SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
           IMAGE_TAG="frontend-${SHA_SHORT}"
           echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
-
       - name: Build and Push Frontend Image
         id: build-image
         run: |
@@ -326,7 +328,6 @@ jobs:
           docker build -t $IMAGE_URI ./quiz-app
           docker push $IMAGE_URI
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
-
       - name: Scan FRONTEND image with Trivy
         uses: aquasecurity/trivy-action@0.28.0
         with:
@@ -337,7 +338,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
   # ===================================================================
-  # JOB 3: UPDATE MANIFESTS
+  # JOB 3: UPDATE MANIFESTS (MODIFIÉ)
   # ===================================================================
   update-manifests:
     name: "Deploy: Update Manifests for ArgoCD"
@@ -345,44 +346,48 @@ jobs:
     needs: [build-backend, build-frontend]
     permissions:
       contents: write
-
     steps:
-      - name: "SOLUTION: Checkout repository to access files"
+      - name: "Checkout repository to access files"
         uses: actions/checkout@v4
-
       - name: Update manifests and push to Git
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           
-          BACKEND_TAG=${{ needs.build-backend.outputs.image_tag }}
+          # MODIFIÉ : Récupération des 3 tags d'image
+          BACKEND_TAG=${{ needs.build-backend.outputs.image_tag_backend }}
+          POPULATE_TAG=${{ needs.build-backend.outputs.image_tag_populate }}
           FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
           
-          if [ -z "$BACKEND_TAG" ] || [ -z "$FRONTEND_TAG" ]; then
+          if [ -z "$BACKEND_TAG" ] || [ -z "$FRONTEND_TAG" ] || [ -z "$POPULATE_TAG" ]; then
             echo "Error: Image tags from previous jobs are empty. Aborting."
             exit 1
           fi
           
+          # MODIFIÉ : Mise à jour des 3 fichiers manifestes
           sed -i "s|\(image: .*iovision-repo:\).*|\1$BACKEND_TAG|" kubernetes-manifest/backend.yaml
           sed -i "s|\(image: .*quiz-app-repo:\).*|\1$FRONTEND_TAG|" kubernetes-manifest/frontend.yaml
+          sed -i "s|\(image: .*populate-repo:\).*|\1$POPULATE_TAG|" kubernetes-manifest/populate-job.yaml
           
-          git add kubernetes-manifest/backend.yaml kubernetes-manifest/frontend.yaml
+          git add kubernetes-manifest/backend.yaml kubernetes-manifest/frontend.yaml kubernetes-manifest/populate-job.yaml
           
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
-            # SOLUTION: Définition de la variable pour le message de commit
             COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
             git commit -m "ci(deploy): Update image tags to ${COMMIT_SHA}"
             git push
           fi
+
+  # ===================================================================
+  # JOB 4: K8S MANIFEST SCAN (MODIFIÉ)
+  # ===================================================================
   k8s-manifest-scan:
-    needs:  update-manifests
+    needs: update-manifests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Run Checkov scan (JSON report)
         uses: bridgecrewio/checkov-action@master   
         with:
@@ -392,13 +397,11 @@ jobs:
           output_file_path: ./checkov-report.json
           quiet: true
         continue-on-error: true
-
       - name: Upload Checkov JSON report
         uses: actions/upload-artifact@v4
         with:
           name: checkov-report
           path: ./checkov-report.json
-
       - name: Run Kubescape scan (JSON report)
         uses: kubescape/github-action@main   
         with:
@@ -406,10 +409,34 @@ jobs:
           format: json
           outputFile: ./kubescape-report.json
         continue-on-error: true
-
-
       - name: Upload Kubescape JSON report
         uses: actions/upload-artifact@v4
         with:
           name: kubescape-report
           path: ./kubescape-report.json
+
+  # ===================================================================
+  # NOUVEAU JOB : GITLEAKS SCAN POUR LES MANIFESTES
+  # ===================================================================
+  gitleaks-scan-manifests:
+    needs: update-manifests
+    name: Gitleaks Analysis (kubernetes-manifest)
+    runs-on: ubuntu-latest
+    container:
+      image: zricethezav/gitleaks:latest
+    defaults:
+      run:
+        working-directory: ./kubernetes-manifest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Mark GitHub workspace as safe
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+      - name: Run Gitleaks scan on kubernetes-manifest
+        run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-manifests.json
+        continue-on-error: true
+      - name: Upload Gitleaks JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-json-manifests-report
+          path: ./kubernetes-manifest/gitleaks-report-manifests.json
