@@ -233,7 +233,6 @@ jobs:
       id-token: write
     outputs:
       image_tag_backend: ${{ steps.vars-backend.outputs.image_tag }} # MODIFIÉ : Nom de l'output
-      image_tag_populate: ${{ steps.vars-populate.outputs.image_tag }} # NOUVEAU : Output pour l'image populate
 
     steps:
       - uses: actions/checkout@v4
