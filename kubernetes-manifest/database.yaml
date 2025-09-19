@@ -5,6 +5,7 @@ metadata:
   name: mongo
   namespace: quiz
   labels:
+  
     app: mongo
 spec:
   replicas: 1
