@@ -375,7 +375,7 @@ jobs:
           
           # MODIFIÉ : Récupération des 3 tags d'image
           BACKEND_TAG=${{ needs.build-backend.outputs.image_tag_backend }}
-          POPULATE_TAG=${{ needs.build-backend.outputs.image_tag_populate }}
+          POPULATE_TAG=${{ needs.build-populate.outputs.image_tag_populate }}
           FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
           
           if [ -z "$BACKEND_TAG" ] || [ -z "$FRONTEND_TAG" ] || [ -z "$POPULATE_TAG" ]; then
