@@ -17,8 +17,8 @@ env:
   ECR_REPOSITORY_BACKEND: "iovision-repo"
   ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
   # --- CORRECTION ICI ---
-  # Le nom correct pour l'image légère est "bare", pas "stable-bare".
-  ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:bare"
+  # On revient à l'image "stable" qui contient les scripts zap-*.py
+  ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:stable"
 
 jobs:
   run-full-dast-analysis:
