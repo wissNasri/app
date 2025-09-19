@@ -6,6 +6,7 @@ metadata:
 spec:
   template:
     spec:
+    
       containers:
       - name: populator
         # L'image que nous venons de créer à l'étape 2
