@@ -24,6 +24,8 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      # --- AJOUT DE LA PERMISSION POUR LES ARTEFACTS ---
+      actions: write
 
     steps:
       - name: "Checkout du code"
@@ -39,15 +41,11 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # --- ÉTAPE CORRIGÉE ---
       - name: "Démarrer l'environnement de test avec Docker Compose"
-        # On définit les variables directement dans le bloc 'env' de cette étape.
-        # Cela garantit qu'elles sont disponibles pour la commande 'docker compose up'.
         env:
           BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
           FRONTEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}
         run: |
-          echo "Démarrage de l'environnement..."
           docker compose -f docker-compose.dast.yml up -d
 
       - name: "Attendre que l'application soit prête"
@@ -62,15 +60,14 @@ jobs:
         with:
           target: "http://localhost:8080/"
           allow_issue_writing: false
-          # On utilise les bonnes options pour ZAP
           cmd_options: >-
             -m 2
             -l WARN
+          # On spécifie un nom d'artefact personnalisé pour éviter le conflit
+          artifact_name: "rapport-dast-zap"
 
-      # --- ÉTAPE DE NETTOYAGE CORRIGÉE ---
       - name: "Arrêter l'environnement de test"
         if: always( )
-        # On redéfinit les variables ici aussi pour que 'docker compose down' fonctionne
         env:
           BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
           FRONTEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}
