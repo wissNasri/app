@@ -1,4 +1,4 @@
-name: "Analyse DAST Approfondie (via Image Docker)"
+name: "Analyse DAST avec Rapport JSON"
 
 on:
   workflow_dispatch:
@@ -20,7 +20,7 @@ env:
 
 jobs:
   run-dast-analysis:
-    name: "Lancer le Scan DAST avec l'image Docker ZAP"
+    name: "Lancer le Scan DAST et Uploader le Rapport JSON"
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -53,12 +53,13 @@ jobs:
           timeout 120s bash -c 'until curl -s --head --fail http://localhost:8080 > /dev/null; do echo "En attente..."; sleep 5; done'
           echo "Application prête !"
 
-      # --- ÉTAPE CLÉ CORRIGÉE ---
+      # --- ÉTAPE 1 : LANCER LE SCAN ET GÉNÉRER LES RAPPORTS ---
       - name: "Lancer le Scan DAST via Docker"
         run: |
+          # On crée un répertoire pour recevoir les rapports
           mkdir -p zap-reports
           
-          # On exécute la commande docker run avec les options finales
+          # On exécute la commande docker run avec toutes les options nécessaires
           docker run \
             --network=host \
             -v $(pwd )/zap-reports:/zap/wrk/:rw \
@@ -69,16 +70,18 @@ jobs:
               -t http://localhost:8080/ \
               -m 2 \
               -l WARN \
-              -J report_json.json \
-              -w report_md.md \
-              -r report_html.html || true
+              -J report_json.json || true
 
-      - name: "Sauvegarder les rapports ZAP"
+      # --- ÉTAPE 2 : UPLOADER UNIQUEMENT LE RAPPORT JSON ---
+      - name: "Sauvegarder le rapport ZAP JSON"
         uses: actions/upload-artifact@v4
+        # S'exécute toujours pour garantir que le rapport est disponible même si le scan échoue
         if: always( )
         with:
-          name: rapport-dast-zap
-          path: zap-reports/
+          # Nom de l'artefact qui sera visible sur la page du workflow
+          name: rapport-dast-json
+          # Chemin exact du fichier JSON à uploader
+          path: zap-reports/report_json.json
           retention-days: 7
 
       - name: "Arrêter l'environnement de test"
