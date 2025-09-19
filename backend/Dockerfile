@@ -6,6 +6,7 @@ RUN useradd --user-group --create-home --shell /bin/bash appuser
 RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
 
+
 COPY package*.json ./
 RUN npm install
 
