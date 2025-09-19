@@ -14,9 +14,9 @@ env:
   ECR_REPOSITORY_BACKEND: "iovision-repo"
   ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
   # ## AJOUT ## - Le nom de votre cluster EKS. Mettez le vrai nom ici.
-  EKS_CLUSTER_NAME: "votre-cluster-eks" 
+  EKS_CLUSTER_NAME: "tws-eks-cluster" 
   # ## AJOUT ## - L'URL de votre repo pour l'étape kubectl.
-  GIT_REPO_URL: "https://raw.githubusercontent.com/votre-nom-github/votre-repo/main"
+  GIT_REPO_URL: "https://github.com/wissNasri/app.git"
 
 jobs:
   frontend-test:
