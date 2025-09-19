@@ -1,4 +1,4 @@
-name: "Analyse DAST avec Rapport JSON (Final)"
+name: "Validation DAST (Scan Uniquement)"
 
 on:
   workflow_dispatch:
@@ -19,8 +19,8 @@ env:
   ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:stable"
 
 jobs:
-  run-dast-analysis:
-    name: "Lancer le Scan DAST et Uploader le Rapport JSON"
+  run-dast-validation:
+    name: "Lancer la Validation DAST"
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -53,36 +53,24 @@ jobs:
           timeout 120s bash -c 'until curl -s --head --fail http://localhost:8080 > /dev/null; do echo "En attente..."; sleep 5; done'
           echo "Application prête !"
 
-      # --- ÉTAPE CLÉ CORRIGÉE ---
-      - name: "Lancer le Scan DAST via Docker"
+      # --- ÉTAPE CLÉ SIMPLIFIÉE ---
+      - name: "Lancer la Validation DAST via Docker"
         run: |
-          mkdir -p zap-reports
-          
-          # On combine les deux options de permissions pour une robustesse maximale
+          # On exécute la commande docker run sans options de rapport.
+          # Le pipeline échouera si ZAP trouve des alertes >= WARN.
           docker run \
             --network=host \
-            -v $(pwd )/zap-reports:/zap/wrk/:rw \
-            -u $(id -u):$(id -g) \
-            -e "HOME=/zap/wrk/" \
             ${{ env.ZAP_IMAGE }} \
             zap-full-scan.py \
               -t http://localhost:8080/ \
               -m 2 \
-              -l WARN \
-              -J report_json.json \
-              -w report_md.md \
-              -r report_html.html || true
+              -l WARN
 
-      - name: "Sauvegarder le rapport ZAP JSON"
-        uses: actions/upload-artifact@v4
-        if: always( )
-        with:
-          name: rapport-dast-json
-          path: zap-reports/report_json.json
-          retention-days: 7
+      # L'étape de sauvegarde de l'artefact a été supprimée.
 
       - name: "Arrêter l'environnement de test"
-        if: always()
+        # S'exécute toujours pour garantir que les conteneurs sont bien nettoyés.
+        if: always( )
         env:
           BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
           FRONTEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}
