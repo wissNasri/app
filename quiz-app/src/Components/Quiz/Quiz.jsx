@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import "./Quiz.css";
 
-const Quiz = ( ) => {
+const Quiz = () => {
   // --- États existants ---
   let [index, setIndex] = useState(0);
   let [question, setQuestion] = useState({});
@@ -12,7 +12,7 @@ const Quiz = ( ) => {
   let [userDetails, setUserDetails] = useState({ name: "", email: "" });
   let [startQuiz, setStartQuiz] = useState(false);
 
-  // --- NOUVEAUX ÉTATS POUR LE CHARGEMENT ET LES ERREURS ---
+  // --- États pour le chargement et les erreurs ---
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -26,24 +26,27 @@ const Quiz = ( ) => {
   // Cet effet se déclenche quand l'utilisateur clique sur "Start Quiz"
   useEffect(() => {
     const fetchQuestions = async () => {
-      setLoading(true); // 1. On commence le chargement
-      setError(null);   // On réinitialise les erreurs
+      setLoading(true);
+      setError(null);
 
       try {
-        // 2. CORRECTION MAJEURE : Utiliser la variable d'environnement de votre ConfigMap
-        const apiUrl = `${import.meta.env.VITE_REACT_APP_API_URL}/questions`;
+        // ==================================================================
+        // ## RECTIFICATION DEMANDÉE ##
+        // L'URL de votre API est maintenant écrite directement ici.
+        const apiUrl = "https://quiz.iovision.site/api/questions";
+        // ==================================================================
         
-        const response = await fetch(apiUrl);
+        const response = await fetch(apiUrl );
         if (!response.ok) {
           throw new Error(`Failed to fetch: ${response.statusText}`);
         }
         
         let questions = await response.json();
 
-        // Transformation des données pour correspondre à la structure attendue
+        // Transformation des données
         questions = questions.map((q) => ({
           ...q,
-          options: [q.option1, q.option2, q.option3, q.option4].filter(opt => opt != null), // Filtre les options nulles
+          options: [q.option1, q.option2, q.option3, q.option4].filter(opt => opt != null),
           answer: q.ans,
         }));
 
@@ -55,9 +58,9 @@ const Quiz = ( ) => {
         }
       } catch (error) {
         console.error("Error fetching questions:", error);
-        setError(error.message); // On stocke le message d'erreur
+        setError(error.message);
       } finally {
-        setLoading(false); // 3. On a fini de charger (succès ou échec)
+        setLoading(false);
       }
     };
 
@@ -117,7 +120,7 @@ const Quiz = ( ) => {
 
   const reset = () => {
     setIndex(0);
-    setData([]); // Vider les données pour forcer un nouveau fetch
+    setData([]);
     setQuestion({});
     setScore(0);
     setLock(false);
@@ -128,7 +131,6 @@ const Quiz = ( ) => {
 
   // --- AFFICHAGE ---
 
-  // Écran de connexion initial
   if (!startQuiz) {
     return (
       <div className="container">
@@ -143,17 +145,14 @@ const Quiz = ( ) => {
     );
   }
 
-  // 4. NOUVELLE VUE : Écran de chargement
   if (loading) {
     return <div className="container"><h2>Loading questions...</h2></div>;
   }
 
-  // NOUVELLE VUE : Écran d'erreur
   if (error) {
     return <div className="container"><h2>Error: {error}</h2><button onClick={reset}>Try Again</button></div>;
   }
 
-  // Écran du quiz ou des résultats
   return (
     <div className="container">
       <h1>Quiz App</h1>
