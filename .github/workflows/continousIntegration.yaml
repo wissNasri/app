@@ -1,4 +1,4 @@
-name: React.js CI + Semgrep (Conditional & Optimized)
+name: React.js CI + Semgrep
 
 on:
   push:
@@ -13,43 +13,13 @@ env:
   AWS_REGION: "us-east-1"
   ECR_REPOSITORY_BACKEND: "iovision-repo"
   ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
-  ECR_REPOSITORY_POPULATE: "populate-repo"
+  ECR_REPOSITORY_POPULATE: "populate-repo" # NOUVEAU : Variable pour le nouveau dépôt ECR
 
 jobs:
   # ===================================================================
-  # JOB 1: DÉTECTER LES FICHIERS MODIFIÉS
-  # ===================================================================
-  check-changes:
-    name: Check for file changes
-    runs-on: ubuntu-latest
-    outputs:
-      backend_changed: ${{ steps.changed-files.outputs.backend_changed }}
-      frontend_changed: ${{ steps.changed-files.outputs.frontend_changed }}
-      manifests_changed: ${{ steps.changed-files.outputs.manifests_changed }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Get changed files
-        id: changed-files
-        uses: tj-actions/changed-files@v44
-        with:
-          files_yaml: |
-            backend_changed:
-              - 'backend/**'
-            frontend_changed:
-              - 'quiz-app/**'
-            manifests_changed:
-              - 'kubernetes-manifest/**'
-
-  # ===================================================================
-  # PISTE FRONTEND : TESTS ET ANALYSES
+  # JOBS DE TESTS ET D'ANALYSE STATIQUE (INCHANGÉS)
   # ===================================================================
   frontend-test:
-    needs: check-changes
-    if: needs.check-changes.outputs.frontend_changed == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -63,7 +33,7 @@ jobs:
         uses: actions/checkout@v4
       - name: USE NODEJS ${{ matrix.node-version }} - ${{ matrix.architecture }}
         uses: actions/setup-node@v4
-      - name: Install, Lint, Test
+      - name: Install project dependencies 
         run: |
           npm i
           npm run lint
@@ -75,78 +45,7 @@ jobs:
       - name: Build
         run: npm run build
 
-  semgrep-scan-frontend:
-    needs: frontend-test
-    if: always() && needs.frontend-test.result == 'success'
-    name: Semgrep Analysis (quiz-app)
-    runs-on: ubuntu-latest
-    container:
-      image: returntocorp/semgrep
-    defaults:
-      run:
-        working-directory: ./quiz-app
-    steps:
-      - uses: actions/checkout@v4
-      - run: semgrep scan --config auto . --json --output semgrep-report-frontend.json
-      - uses: actions/upload-artifact@v4
-        with:
-          name: semgrep-json-frontend-report
-          path: ./quiz-app/semgrep-report-frontend.json
-
-  gitleaks-scan-frontend:
-    needs: frontend-test
-    if: always() && needs.frontend-test.result == 'success'
-    name: Gitleaks Analysis (quiz-app)
-    runs-on: ubuntu-latest
-    container:
-      image: zricethezav/gitleaks:latest
-    defaults:
-      run:
-        working-directory: ./quiz-app
-    steps:
-      - uses: actions/checkout@v4
-      - run: git config --global --add safe.directory $GITHUB_WORKSPACE
-      - run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-frontend.json
-        continue-on-error: true
-      - uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-json-frontend-report
-          path: ./quiz-app/gitleaks-report-frontend.json
-    
-  dependency-check-frontend:
-    needs: frontend-test
-    if: always() && needs.frontend-test.result == 'success'
-    name: OWASP Dependency-Check (quiz-app)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20.x'
-          cache: 'npm'
-          cache-dependency-path: 'quiz-app/package-lock.json'
-      - run: npm install
-        working-directory: ./quiz-app
-      - uses: dependency-check/Dependency-Check_Action@main
-        with:
-          project: 'quiz-app-frontend'
-          path: './quiz-app'
-          format: 'HTML'
-          out: 'reports-frontend'
-          args: >
-            --scan .
-            --enableExperimental
-      - uses: actions/upload-artifact@v4
-        with:
-          name: owasp-dep-check-frontend-report
-          path: reports-frontend
-        
-  # ===================================================================
-  # PISTE BACKEND : TESTS ET ANALYSES
-  # ===================================================================
   backend-test:
-    needs: check-changes
-    if: needs.check-changes.outputs.backend_changed == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -160,7 +59,7 @@ jobs:
         uses: actions/checkout@v4
       - name: USE NODEJS ${{ matrix.node-version }} - ${{ matrix.architecture }}
         uses: actions/setup-node@v4
-      - name: Install, Lint, Test
+      - name: Install project dependencies 
         run: |
           npm i
           npm run lint
@@ -170,10 +69,84 @@ jobs:
         env:
           CI: true 
 
+  semgrep-scan-frontend:
+    needs: frontend-test
+    name: Semgrep Analysis (quiz-app only)
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep
+    defaults:
+      run:
+        working-directory: ./quiz-app
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Run Semgrep scan (with JSON report)
+        run: semgrep scan --config auto . --json --output semgrep-report-frontend.json
+      - name: Upload Semgrep JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-json-frontend-report
+          path: ./quiz-app/semgrep-report-frontend.json
+
+  gitleaks-scan-frontend:
+    needs: frontend-test
+    name: Gitleaks Analysis (quiz-app only)
+    runs-on: ubuntu-latest
+    container:
+      image: zricethezav/gitleaks:latest
+    defaults:
+      run:
+        working-directory: ./quiz-app
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Mark GitHub workspace as safe
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+      - name: Run Gitleaks scan on quiz-app
+        run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-frontend.json
+        continue-on-error: true
+      - name: Upload Gitleaks JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-json-frontend-report
+          path: ./quiz-app/gitleaks-report-frontend.json
+    
+  dependency-check-frontend:
+    needs: frontend-test
+    name: OWASP Dependency-Check (quiz-app)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: 'quiz-app/package-lock.json'
+      - name: Install dependencies for analysis
+        working-directory: ./quiz-app
+        run: npm install
+      - name: Run OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'quiz-app-frontend'
+          path: './quiz-app'
+          format: 'HTML'
+          out: 'reports-frontend'
+          args: >
+            --scan .
+            --enableExperimental
+      - name: Upload Dependency-Check report
+        uses: actions/upload-artifact@v4
+        with:
+          name: owasp-dep-check-frontend-report
+          path: reports-frontend
+        
   semgrep-scan-backend:
     needs: backend-test
-    if: always() && needs.backend-test.result == 'success'
-    name: Semgrep Analysis (backend)
+    name: Semgrep Analysis 
     runs-on: ubuntu-latest
     container:
       image: returntocorp/semgrep
@@ -181,17 +154,19 @@ jobs:
       run:
         working-directory: ./backend
     steps:
-      - uses: actions/checkout@v4
-      - run: semgrep scan --config auto . --json --output semgrep-report-backend.json
-      - uses: actions/upload-artifact@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Run Semgrep scan 
+        run: semgrep scan --config auto . --json --output semgrep-report-backend.json
+      - name: Upload Semgrep JSON report
+        uses: actions/upload-artifact@v4
         with:
-          name: semgrep-json-backend-report
+          name: semgrep-json-report
           path: ./backend/semgrep-report-backend.json
 
   gitleaks-scan-backend:
     needs: backend-test
-    if: always() && needs.backend-test.result == 'success'
-    name: Gitleaks Analysis (backend)
+    name: Gitleaks Analysis 
     runs-on: ubuntu-latest
     container:
       image: zricethezav/gitleaks:latest
@@ -199,30 +174,40 @@ jobs:
       run:
         working-directory: ./backend
     steps:
-      - uses: actions/checkout@v4
-      - run: git config --global --add safe.directory $GITHUB_WORKSPACE
-      - run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-backend.json
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Mark GitHub workspace as safe
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+      - name: Run Gitleaks scan on backend
+        run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-backend.json
         continue-on-error: true
-      - uses: actions/upload-artifact@v4
+      - name: Upload Gitleaks JSON report
+        uses: actions/upload-artifact@v4
         with:
-          name: gitleaks-json-backend-report
+          name: gitleaks-json-report
           path: ./backend/gitleaks-report-backend.json
   
   dependency-check-backend:
     needs: backend-test
-    if: always() && needs.backend-test.result == 'success'
     name: OWASP Dependency-Check (backend)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '20.x'
           cache: 'npm'
           cache-dependency-path: 'backend/package-lock.json'
-      - run: npm install
+      - name: Install dependencies for analysis
         working-directory: ./backend
-      - uses: dependency-check/Dependency-Check_Action@main
+        run: npm install
+      - name: Run OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
         with:
           project: 'quiz-app-backend'
           path: './backend'
@@ -231,23 +216,24 @@ jobs:
           args: >
             --scan .
             --enableExperimental
-      - uses: actions/upload-artifact@v4
+      - name: Upload Dependency-Check report
+        uses: actions/upload-artifact@v4
         with:
           name: owasp-dep-check-backend-report
           path: reports-backend
 
   # ===================================================================
-  # JOBS DE BUILD (CONDITIONNELS ET DÉPENDANCES CORRIGÉES)
+  # JOB MODIFIÉ : BUILD & PUSH BACKEND + POPULATE
   # ===================================================================
   build-backend:
-    name: "Build & Push: Backend"
-    needs: backend-test
-    if: always() && needs.backend-test.result == 'success'
+    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
+    name: "Build & Push: Backend " # MODIFIÉ : Titre du job
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     outputs:
-      image_tag_backend: ${{ steps.vars-backend.outputs.image_tag }}
+      image_tag_backend: ${{ steps.vars-backend.outputs.image_tag }} # MODIFIÉ : Nom de l'output
+
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -256,17 +242,23 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
+
       - name: Define Backend Image Tag
-        id: vars-backend
-        run: echo "image_tag=backend-$(echo ${{ github.sha }} | cut -c1-8)" >> $GITHUB_OUTPUT
+        id: vars-backend # MODIFIÉ : ID de l'étape
+        run: |
+          SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
+          IMAGE_TAG="backend-${SHA_SHORT}"
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
       - name: Build and Push Backend Image
-        id: build-image-backend
+        id: build-image-backend # MODIFIÉ : ID de l'étape
         run: |
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
           IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:${{ steps.vars-backend.outputs.image_tag }}"
           docker build -t $IMAGE_URI ./backend
           docker push $IMAGE_URI
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+
       - name: Scan BACKEND image with Trivy
         uses: aquasecurity/trivy-action@0.28.0
         with:
@@ -276,15 +268,18 @@ jobs:
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
+      # --- NOUVEAU : Étapes pour l'image populate ---
+
+
   build-populate:
-    name: "Build & Push: Populate"
-    needs: backend-test
-    if: always() && needs.backend-test.result == 'success'
+    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
+    name: "Build & Push:  Populate" # MODIFIÉ : Titre du job
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     outputs:
-      image_tag_populate: ${{ steps.vars-populate.outputs.image_tag }}
+      image_tag_populate: ${{ steps.vars-populate.outputs.image_tag }} # NOUVEAU : Output pour l'image populate
+
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -293,9 +288,14 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
+
       - name: Define Populate Image Tag
         id: vars-populate
-        run: echo "image_tag=populate-$(echo ${{ github.sha }} | cut -c1-8)" >> $GITHUB_OUTPUT
+        run: |
+          SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
+          IMAGE_TAG="populate-${SHA_SHORT}"
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
       - name: Build and Push Populate Image
         id: build-image-populate
         run: |
@@ -304,6 +304,7 @@ jobs:
           docker build -t $IMAGE_URI -f ./backend/Dockerfile.populate ./backend
           docker push $IMAGE_URI
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+
       - name: Scan POPULATE image with Trivy
         uses: aquasecurity/trivy-action@0.28.0
         with:
@@ -313,10 +314,12 @@ jobs:
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
+  # ===================================================================
+  # JOB 2: BUILD & PUSH FRONTEND (INCHANGÉ)
+  # ===================================================================
   build-frontend: 
+    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
     name: "Build & Push: Frontend"
-    needs: frontend-test
-    if: always() && needs.frontend-test.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -332,7 +335,10 @@ jobs:
         id: login-ecr
       - name: Define Frontend Image Tag
         id: vars
-        run: echo "image_tag=frontend-$(echo ${{ github.sha }} | cut -c1-8)" >> $GITHUB_OUTPUT
+        run: |
+          SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
+          IMAGE_TAG="frontend-${SHA_SHORT}"
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
       - name: Build and Push Frontend Image
         id: build-image
         run: |
@@ -351,81 +357,88 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
   # ===================================================================
-  # JOB DE SYNCHRONISATION ET DE DÉPLOIEMENT
+  # JOB 3: UPDATE MANIFESTS (MODIFIÉ)
   # ===================================================================
   update-manifests:
     name: "Deploy: Update Manifests for ArgoCD"
     runs-on: ubuntu-latest
-    needs: [check-changes, build-backend, build-frontend, build-populate]
-    if: always() && (needs.build-backend.result == 'success' || needs.build-frontend.result == 'success' || needs.build-populate.result == 'success' || needs.check-changes.outputs.manifests_changed == 'true')
+    needs: [build-backend, build-frontend,build-populate]
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: "Checkout repository to access files"
+        uses: actions/checkout@v4
       - name: Update manifests and push to Git
         run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git config --global user.name 'wissNasri'
+          git config --global user.email 'wissemnasri81@gmail.com'
           
+          # MODIFIÉ : Récupération des 3 tags d'image
           BACKEND_TAG=${{ needs.build-backend.outputs.image_tag_backend }}
           POPULATE_TAG=${{ needs.build-populate.outputs.image_tag_populate }}
           FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
           
-          if [[ -n "$BACKEND_TAG" ]]; then
-            sed -i "s|\(image: .*iovision-repo:\).*|\1$BACKEND_TAG|" kubernetes-manifest/backend.yaml
-          fi
-          if [[ -n "$POPULATE_TAG" ]]; then
-            sed -i "s|\(image: .*populate-repo:\).*|\1$POPULATE_TAG|" kubernetes-manifest/populate-job.yaml
-          fi
-          if [[ -n "$FRONTEND_TAG" ]]; then
-            sed -i "s|\(image: .*quiz-app-repo:\).*|\1$FRONTEND_TAG|" kubernetes-manifest/frontend.yaml
+          if [ -z "$BACKEND_TAG" ] || [ -z "$FRONTEND_TAG" ] || [ -z "$POPULATE_TAG" ]; then
+            echo "Error: Image tags from previous jobs are empty. Aborting."
+            exit 1
           fi
           
-          git add kubernetes-manifest/*.yaml
+          # MODIFIÉ : Mise à jour des 3 fichiers manifestes
+          sed -i "s|\(image: .*iovision-repo:\).*|\1$BACKEND_TAG|" kubernetes-manifest/backend.yaml
+          sed -i "s|\(image: .*quiz-app-repo:\).*|\1$FRONTEND_TAG|" kubernetes-manifest/frontend.yaml
+          sed -i "s|\(image: .*populate-repo:\).*|\1$POPULATE_TAG|" kubernetes-manifest/populate-job.yaml
+          
+          git add kubernetes-manifest/backend.yaml kubernetes-manifest/frontend.yaml kubernetes-manifest/populate-job.yaml
           
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
-            git commit -m "ci(deploy): Update image tags to $(echo ${{ github.sha }} | cut -c1-8)"
+            COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
+            git commit -m "ci(deploy): Update image tags to ${COMMIT_SHA}"
             git push
           fi
 
   # ===================================================================
-  # JOBS D'ANALYSE POST-DÉPLOIEMENT
+  # JOB 4: K8S MANIFEST SCAN (MODIFIÉ)
   # ===================================================================
   k8s-manifest-scan:
     needs: update-manifests
-    if: always() && needs.update-manifests.result == 'success'
-    name: K8s Manifests Static Analysis
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: bridgecrewio/checkov-action@master   
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Run Checkov scan (JSON report)
+        uses: bridgecrewio/checkov-action@master   
         with:
           directory: ./kubernetes-manifest
           framework: kubernetes
           output_format: json
           output_file_path: ./checkov-report.json
           quiet: true
-          continue-on-error: true
-      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+      - name: Upload Checkov JSON report
+        uses: actions/upload-artifact@v4
         with:
           name: checkov-report
           path: ./checkov-report.json
-      - uses: kubescape/github-action@main   
+      - name: Run Kubescape scan (JSON report)
+        uses: kubescape/github-action@main   
         with:
           files: "kubernetes-manifest/*.yaml"
           format: json
           outputFile: ./kubescape-report.json
-          continue-on-error: true
-      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+      - name: Upload Kubescape JSON report
+        uses: actions/upload-artifact@v4
         with:
           name: kubescape-report
           path: ./kubescape-report.json
 
+  # ===================================================================
+  # NOUVEAU JOB : GITLEAKS SCAN POUR LES MANIFESTES
+  # ===================================================================
   gitleaks-scan-manifests:
     needs: update-manifests
-    if: always() && needs.update-manifests.result == 'success'
     name: Gitleaks Analysis (kubernetes-manifest)
     runs-on: ubuntu-latest
     container:
@@ -434,11 +447,15 @@ jobs:
       run:
         working-directory: ./kubernetes-manifest
     steps:
-      - uses: actions/checkout@v4
-      - run: git config --global --add safe.directory $GITHUB_WORKSPACE
-      - run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-manifests.json
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Mark GitHub workspace as safe
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+      - name: Run Gitleaks scan on kubernetes-manifest
+        run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-manifests.json
         continue-on-error: true
-      - uses: actions/upload-artifact@v4
+      - name: Upload Gitleaks JSON report
+        uses: actions/upload-artifact@v4
         with:
           name: gitleaks-json-manifests-report
           path: ./kubernetes-manifest/gitleaks-report-manifests.json
