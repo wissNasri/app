@@ -16,9 +16,9 @@ env:
   AWS_REGION: "us-east-1"
   ECR_REPOSITORY_BACKEND: "iovision-repo"
   ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
-  # On utilise l'image "bare" de ZAP, qui est plus légère car elle ne contient pas les navigateurs.
-  # Le Spider AJAX les téléchargera au besoin.
-  ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:stable-bare"
+  # --- CORRECTION ICI ---
+  # Le nom correct pour l'image légère est "bare", pas "stable-bare".
+  ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:bare"
 
 jobs:
   run-full-dast-analysis:
@@ -55,10 +55,8 @@ jobs:
           timeout 120s bash -c 'until curl -s --head --fail http://localhost:8080 > /dev/null; do echo "En attente..."; sleep 5; done'
           echo "Application prête !"
 
-      # --- ÉTAPE DE SCAN AMÉLIORÉE ---
       - name: "Lancer le Scan DAST Complet via Docker"
         run: |
-          # On exécute la commande docker run avec les options améliorées
           docker run \
             --network=host \
             ${{ env.ZAP_IMAGE }} \
