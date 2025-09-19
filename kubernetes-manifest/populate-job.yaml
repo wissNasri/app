@@ -9,7 +9,7 @@ spec:
       containers:
       - name: populator
         # L'image que nous venons de créer à l'étape 2
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/iovision-repo:populate-7789d016
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/iovision-repo:populate-5482eff4
         env:
         # Le Job a besoin de savoir comment se connecter à Mongo, comme le backend
         - name: MONGO_URI
