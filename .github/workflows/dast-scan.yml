@@ -1,4 +1,4 @@
-name: "Analyse DAST Approfondie (via Image Docker )"
+name: "Analyse DAST Approfondie (via Image Docker)"
 
 on:
   workflow_dispatch:
@@ -16,7 +16,6 @@ env:
   AWS_REGION: "us-east-1"
   ECR_REPOSITORY_BACKEND: "iovision-repo"
   ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
-  # On définit le nom de l'image ZAP ici pour la réutiliser facilement
   ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:stable"
 
 jobs:
@@ -54,18 +53,17 @@ jobs:
           timeout 120s bash -c 'until curl -s --head --fail http://localhost:8080 > /dev/null; do echo "En attente..."; sleep 5; done'
           echo "Application prête !"
 
-      # --- ÉTAPE CLÉ : APPEL DIRECT À L'IMAGE DOCKER ZAP ---
+      # --- ÉTAPE CLÉ CORRIGÉE ---
       - name: "Lancer le Scan DAST via Docker"
         run: |
-          # On crée un répertoire pour les rapports pour garder les choses propres
           mkdir -p zap-reports
           
-          # On exécute la commande docker run. Le '|| true' à la fin est important :
-          # il empêche le pipeline de s'arrêter immédiatement si ZAP trouve des failles (code de sortie > 0 ),
-          # ce qui nous permet d'uploader les rapports dans l'étape suivante.
+          # On exécute la commande docker run avec l'option -u pour spécifier l'utilisateur.
+          # $(id -u ):$(id -g) passe l'ID de l'utilisateur et du groupe du runner actuel.
           docker run \
             --network=host \
             -v $(pwd)/zap-reports:/zap/wrk/:rw \
+            -u $(id -u):$(id -g) \
             ${{ env.ZAP_IMAGE }} \
             zap-full-scan.py \
               -t http://localhost:8080/ \
@@ -75,7 +73,6 @@ jobs:
               -w report_md.md \
               -r report_html.html || true
 
-      # --- ÉTAPE D'UPLOAD D'ARTEFACT FIABLE ---
       - name: "Sauvegarder les rapports ZAP"
         uses: actions/upload-artifact@v4
         if: always( )
