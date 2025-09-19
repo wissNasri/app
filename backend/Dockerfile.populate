@@ -1,0 +1,27 @@
+# Utiliser la même image de base que votre backend
+FROM node:18
+
+# Créer le même utilisateur non-root pour la cohérence
+RUN useradd --user-group --create-home --shell /bin/bash appuser
+
+# Créer le répertoire de travail
+RUN mkdir -p /usr/src/app
+WORKDIR /usr/src/app
+
+
+# Copier les fichiers de dépendances et les installer
+COPY package*.json ./
+RUN npm install
+
+# Copier tout le code de l'application
+COPY . .
+
+# Changer le propriétaire des fichiers pour l'utilisateur non-root
+RUN chown -R appuser:appuser /usr/src/app
+
+# Passer à l'utilisateur non-root
+USER appuser
+
+# LA COMMANDE QUI CHANGE TOUT :
+# Au lieu de démarrer le serveur, nous lançons le script de peuplement.
+CMD ["node", "populateDB.js"]
