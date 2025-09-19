@@ -1,4 +1,4 @@
-name: "Validation DAST (Scan Uniquement)"
+name: "Analyse DAST Complète de l'Application"
 
 on:
   workflow_dispatch:
@@ -16,11 +16,13 @@ env:
   AWS_REGION: "us-east-1"
   ECR_REPOSITORY_BACKEND: "iovision-repo"
   ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
-  ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:stable"
+  # On utilise l'image "bare" de ZAP, qui est plus légère car elle ne contient pas les navigateurs.
+  # Le Spider AJAX les téléchargera au besoin.
+  ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:stable-bare"
 
 jobs:
-  run-dast-validation:
-    name: "Lancer la Validation DAST"
+  run-full-dast-analysis:
+    name: "Lancer le Scan DAST Complet (avec Spider AJAX)"
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -53,23 +55,20 @@ jobs:
           timeout 120s bash -c 'until curl -s --head --fail http://localhost:8080 > /dev/null; do echo "En attente..."; sleep 5; done'
           echo "Application prête !"
 
-      # --- ÉTAPE CLÉ SIMPLIFIÉE ---
-      - name: "Lancer la Validation DAST via Docker"
+      # --- ÉTAPE DE SCAN AMÉLIORÉE ---
+      - name: "Lancer le Scan DAST Complet via Docker"
         run: |
-          # On exécute la commande docker run sans options de rapport.
-          # Le pipeline échouera si ZAP trouve des alertes >= WARN.
+          # On exécute la commande docker run avec les options améliorées
           docker run \
             --network=host \
             ${{ env.ZAP_IMAGE }} \
             zap-full-scan.py \
               -t http://localhost:8080/ \
-              -m 2 \
+              -j \
+              -m 5 \
               -l WARN
 
-      # L'étape de sauvegarde de l'artefact a été supprimée.
-
       - name: "Arrêter l'environnement de test"
-        # S'exécute toujours pour garantir que les conteneurs sont bien nettoyés.
         if: always( )
         env:
           BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
