@@ -1,0 +1,87 @@
+name: "Analyse de Sécurité DAST à la Demande"
+
+on:
+  # Permet de lancer ce pipeline manuellement depuis l'onglet "Actions" de GitHub.
+  workflow_dispatch:
+    inputs:
+      # Champ pour saisir le tag de l'image backend à tester.
+      backend_image_tag:
+        description: 'Tag de l''image backend (ex: backend-8a6d1a28)'
+        required: true
+        default: 'latest'
+      # Champ pour saisir le tag de l'image frontend à tester.
+      frontend_image_tag:
+        description: 'Tag de l''image frontend (ex: frontend-8a6d1a28)'
+        required: true
+        default: 'latest'
+
+# Variables d'environnement globales pour ce pipeline.
+env:
+  AWS_REGION: "us-east-1"
+  ECR_REPOSITORY_BACKEND: "iovision-repo"
+  ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
+
+jobs:
+  # Le seul et unique job de ce pipeline.
+  run-dast-analysis:
+    name: "Lancer le Scan DAST"
+    runs-on: ubuntu-latest
+
+    steps:
+      # Étape 1: Récupérer le code du dépôt pour accéder au fichier docker-compose.
+      - name: "Checkout du code"
+        uses: actions/checkout@v4
+
+      # Étape 2: Se connecter à AWS ECR pour pouvoir télécharger les images.
+      - name: "Connexion à AWS ECR"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::228578233417:role/oicd
+          aws-region: ${{ env.AWS_REGION }}
+      - name: "Login to Amazon ECR"
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Étape 3: Démarrer l'environnement avec Docker Compose.
+      - name: "Démarrer l'environnement de test"
+        # On passe les URI complètes des images en variables d'environnement.
+        # Docker Compose les utilisera pour remplacer les placeholders dans le fichier .yml.
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
+          FRONTEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}
+        run: |
+          echo "Utilisation de l'image backend: $BACKEND_IMAGE_URI"
+          echo "Utilisation de l'image frontend: $FRONTEND_IMAGE_URI"
+          
+          # On utilise le fichier docker-compose dédié au DAST.
+          docker-compose -f docker-compose.dast.yml up -d
+
+      # Étape 4: Attendre que l'application soit complètement démarrée et accessible.
+      - name: "Attendre que l'application soit prête"
+        run: |
+          echo "Attente de la disponibilité du frontend sur http://localhost:8080..."
+          # On attend jusqu'à 2 minutes que l'URL réponde avec un code HTTP 200.
+          timeout 120s bash -c 'until curl -s --head --fail http://localhost:8080; do echo "En attente..."; sleep 5; done'
+          echo "Application prête pour le scan !"
+
+      # Étape 5: Lancer le scan de sécurité DAST avec OWASP ZAP.
+      - name: "Lancer le scan DAST avec OWASP ZAP"
+        uses: zaproxy/action-baseline@v0.11.0
+        with:
+          # Cible du scan : l'application qui tourne localement grâce à Docker Compose.
+          target: "http://localhost:8080/"
+          # Fait échouer le pipeline si des vulnérabilités de niveau "High" sont trouvées.
+          fail_action: true
+          # Le rapport du scan sera sauvegardé en tant qu'artefact.
+          artifact_name: "zap-dast-report"
+
+      # Étape 6: Nettoyer l'environnement (cette étape s'exécute toujours, même si le scan échoue ).
+      - name: "Arrêter l'environnement de test"
+        if: always()
+        run: |
+          echo "Affichage des logs des conteneurs avant l'arrêt..."
+          docker-compose -f docker-compose.dast.yml logs
+          
+          echo "Arrêt de l'environnement Docker Compose..."
+          docker-compose -f docker-compose.dast.yml down
