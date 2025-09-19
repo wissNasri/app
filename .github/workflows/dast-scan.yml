@@ -29,6 +29,13 @@ jobs:
       - name: "Checkout du code"
         uses: actions/checkout@v4
 
+      # --- CORRECTION ICI : L'ÉTAPE MANQUANTE A ÉTÉ RAJOUTÉE ---
+      - name: "Configurer les informations d'identification AWS"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::228578233417:role/oicd
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: "Connexion à AWS ECR"
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -47,17 +54,11 @@ jobs:
           timeout 120s bash -c 'until curl -s --head --fail http://localhost:8080 > /dev/null; do echo "En attente..."; sleep 5; done'
           echo "Application prête !"
 
-      # --- ÉTAPE CLÉ : LE FULL SCAN ---
       - name: "Lancer le Scan DAST Approfondi (Full Scan )"
         uses: zaproxy/action-full-scan@v0.11.0
         with:
-          # Cible du scan : l'application tourne sur le runner, accessible via localhost.
           target: "http://localhost:8080/"
-          
-          # Le "spider" explore le site pendant 2 minutes pour découvrir les pages.
           spider_minutes: 2
-          
-          # Le pipeline n'échouera que pour les alertes critiques de niveau "High".
           fail_on_risk: 'High'
 
       - name: "Arrêter l'environnement de test"
