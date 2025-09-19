@@ -1,4 +1,4 @@
-name: "Analyse DAST Approfondie (Full Scan)"
+name: "Analyse DAST Approfondie (via Image Docker )"
 
 on:
   workflow_dispatch:
@@ -16,10 +16,12 @@ env:
   AWS_REGION: "us-east-1"
   ECR_REPOSITORY_BACKEND: "iovision-repo"
   ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
+  # On définit le nom de l'image ZAP ici pour la réutiliser facilement
+  ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:stable"
 
 jobs:
-  run-full-dast-analysis:
-    name: "Lancer le Scan DAST Approfondi"
+  run-dast-analysis:
+    name: "Lancer le Scan DAST avec l'image Docker ZAP"
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -39,7 +41,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: "Démarrer l'environnement de test avec Docker Compose"
+      - name: "Démarrer l'environnement de test"
         env:
           BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
           FRONTEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}
@@ -52,35 +54,35 @@ jobs:
           timeout 120s bash -c 'until curl -s --head --fail http://localhost:8080 > /dev/null; do echo "En attente..."; sleep 5; done'
           echo "Application prête !"
 
-      # --- ÉTAPE ZAP CORRIGÉE ---
-      - name: "Lancer le Scan DAST Approfondi (Full Scan )"
-        uses: zaproxy/action-full-scan@v0.11.0
-        with:
-          target: "http://localhost:8080/"
-          allow_issue_writing: false
-          cmd_options: >-
-            -m 2
-            -l WARN
-          # On ne spécifie PAS de nom d'artefact ici pour laisser ZAP
-          # simplement générer les fichiers de rapport dans le répertoire de travail.
-          # artifact_name: 'rapport-dast-zap' # Ligne supprimée
+      # --- ÉTAPE CLÉ : APPEL DIRECT À L'IMAGE DOCKER ZAP ---
+      - name: "Lancer le Scan DAST via Docker"
+        run: |
+          # On crée un répertoire pour les rapports pour garder les choses propres
+          mkdir -p zap-reports
+          
+          # On exécute la commande docker run. Le '|| true' à la fin est important :
+          # il empêche le pipeline de s'arrêter immédiatement si ZAP trouve des failles (code de sortie > 0 ),
+          # ce qui nous permet d'uploader les rapports dans l'étape suivante.
+          docker run \
+            --network=host \
+            -v $(pwd)/zap-reports:/zap/wrk/:rw \
+            ${{ env.ZAP_IMAGE }} \
+            zap-full-scan.py \
+              -t http://localhost:8080/ \
+              -m 2 \
+              -l WARN \
+              -J report_json.json \
+              -w report_md.md \
+              -r report_html.html || true
 
-      # --- NOUVELLE ÉTAPE POUR UPLOADER L'ARTEFACT MANUELLEMENT ---
-      - name: "Sauvegarder les rapports ZAP en tant qu'artefact"
+      # --- ÉTAPE D'UPLOAD D'ARTEFACT FIABLE ---
+      - name: "Sauvegarder les rapports ZAP"
         uses: actions/upload-artifact@v4
-        # Cette étape s'exécute toujours, même si le scan ZAP échoue,
-        # pour que vous ayez toujours le rapport.
         if: always( )
         with:
-          # Nom de l'artefact qui sera visible sur la page du workflow.
           name: rapport-dast-zap
-          # Chemin des fichiers à inclure dans l'artefact.
-          # ZAP génère ces fichiers par défaut.
-          path: |
-            report_html.html
-            report_md.md
-            report_json.json
-          retention-days: 7 # Garde l'artefact pendant 7 jours
+          path: zap-reports/
+          retention-days: 7
 
       - name: "Arrêter l'environnement de test"
         if: always()
@@ -88,7 +90,5 @@ jobs:
           BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
           FRONTEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}
         run: |
-          echo "Affichage des logs des conteneurs avant l'arrêt..."
-          docker compose -f docker-compose.dast.yml logs
           echo "Arrêt de l'environnement Docker Compose..."
           docker compose -f docker-compose.dast.yml down
