@@ -1,0 +1,43 @@
+version: '3.8'
+
+# Ce fichier est spécifiquement pour lancer un environnement de test DAST
+# en utilisant des images Docker existantes.
+services:
+  # 1. Le service Backend
+  backend:
+    # La variable ${BACKEND_IMAGE_URI} sera fournie par le pipeline.
+    image: ${BACKEND_IMAGE_URI}
+    container_name: dast-backend
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/quizdb
+    depends_on:
+      - mongo
+    networks:
+      - dast-network
+
+  # 2. Le service Frontend
+  frontend:
+    # La variable ${FRONTEND_IMAGE_URI} sera fournie par le pipeline.
+    image: ${FRONTEND_IMAGE_URI}
+    container_name: dast-frontend
+    ports:
+      # On expose le port 8080 pour que ZAP puisse scanner l'application.
+      - "8080:8080"
+    environment:
+      # Le frontend contacte le backend via son nom de service.
+      - VITE_REACT_APP_API_URL=http://backend:3000
+    depends_on:
+      - backend
+    networks:
+      - dast-network
+
+  # 3. Le service Base de Données MongoDB
+  mongo:
+    image: mongo:4.4.6
+    container_name: dast-mongo
+    networks:
+      - dast-network
+
+# Le réseau isolé pour cet environnement de test.
+networks:
+  dast-network:
