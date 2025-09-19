@@ -29,7 +29,6 @@ jobs:
       - name: "Checkout du code"
         uses: actions/checkout@v4
 
-      # --- CORRECTION ICI : L'ÉTAPE MANQUANTE A ÉTÉ RAJOUTÉE ---
       - name: "Configurer les informations d'identification AWS"
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -41,10 +40,11 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: "Démarrer l'environnement de test avec Docker Compose"
-        env:
-          BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
-          FRONTEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}
+        # On définit les variables ici pour qu'elles soient disponibles dans les étapes suivantes
         run: |
+          echo "BACKEND_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}" >> $GITHUB_ENV
+          echo "FRONTEND_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}" >> $GITHUB_ENV
+          
           echo "Démarrage de l'environnement..."
           docker compose -f docker-compose.dast.yml up -d
 
@@ -54,17 +54,25 @@ jobs:
           timeout 120s bash -c 'until curl -s --head --fail http://localhost:8080 > /dev/null; do echo "En attente..."; sleep 5; done'
           echo "Application prête !"
 
+      # --- ÉTAPE ZAP CORRIGÉE ---
       - name: "Lancer le Scan DAST Approfondi (Full Scan )"
         uses: zaproxy/action-full-scan@v0.11.0
         with:
           target: "http://localhost:8080/"
-          spider_minutes: 2
-          fail_on_risk: 'High'
+          
+          # On désactive la création d'issues pour éviter l'erreur de permission 403
+          allow_issue_writing: false
+          
+          # On passe les options via cmd_options (la bonne méthode )
+          cmd_options: >-
+            -m 2
+            -l HIGH
 
       - name: "Arrêter l'environnement de test"
-        if: always( )
+        if: always()
         run: |
           echo "Affichage des logs des conteneurs avant l'arrêt..."
+          # Les variables d'environnement sont maintenant disponibles ici
           docker compose -f docker-compose.dast.yml logs
           echo "Arrêt de l'environnement Docker Compose..."
           docker compose -f docker-compose.dast.yml down
