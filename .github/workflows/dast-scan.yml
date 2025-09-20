@@ -1,76 +1,34 @@
-name: "Analyse DAST Complète de l'Application"
+# Fichier pour lancer l'environnement de test DAST
+version: '3.8'
 
-on:
-  workflow_dispatch:
-    inputs:
-      backend_image_tag:
-        description: 'Tag de l''image backend (ex: backend-de6efe22)'
-        required: true
-        default: 'backend-de6efe22'
-      frontend_image_tag:
-        description: 'Tag de l''image frontend (ex: frontend-de6efe22)'
-        required: true
-        default: 'frontend-de6efe22'
+services:
+  backend:
+    image: ${BACKEND_IMAGE_URI}
+    container_name: dast-backend
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/quizdb
+    depends_on:
+      - mongo
+    networks:
+      - dast-network
 
-env:
-  AWS_REGION: "us-east-1"
-  ECR_REPOSITORY_BACKEND: "iovision-repo"
-  ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
-  # --- CORRECTION ICI ---
-  # On revient à l'image "stable" qui contient les scripts zap-*.py
-  ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:stable"
+  frontend:
+    image: ${FRONTEND_IMAGE_URI}
+    container_name: dast-frontend
+    ports:
+      - "8080:8080"
+    environment:
+      - VITE_REACT_APP_API_URL=http://backend:3000
+    depends_on:
+      - backend
+    networks:
+      - dast-network
 
-jobs:
-  run-full-dast-analysis:
-    name: "Lancer le Scan DAST Complet (avec Spider AJAX)"
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
+  mongo:
+    image: mongo:4.4.6
+    container_name: dast-mongo
+    networks:
+      - dast-network
 
-    steps:
-      - name: "Checkout du code"
-        uses: actions/checkout@v4
-
-      - name: "Configurer les informations d'identification AWS"
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::228578233417:role/oicd
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: "Connexion à AWS ECR"
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: "Démarrer l'environnement de test"
-        env:
-          BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
-          FRONTEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}
-        run: |
-          docker compose -f docker-compose.dast.yml up -d
-
-      - name: "Attendre que l'application soit prête"
-        run: |
-          echo "Attente de la disponibilité du frontend sur http://localhost:8080..."
-          timeout 120s bash -c 'until curl -s --head --fail http://localhost:8080 > /dev/null; do echo "En attente..."; sleep 5; done'
-          echo "Application prête !"
-
-      - name: "Lancer le Scan DAST Complet via Docker"
-        run: |
-          docker run \
-            --network=host \
-            ${{ env.ZAP_IMAGE }} \
-            zap-full-scan.py \
-              -t http://localhost:8080/ \
-              -j \
-              -m 5 \
-              -l WARN
-
-      - name: "Arrêter l'environnement de test"
-        if: always( )
-        env:
-          BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
-          FRONTEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}
-        run: |
-          echo "Arrêt de l'environnement Docker Compose..."
-          docker compose -f docker-compose.dast.yml down
+networks:
+  dast-network:
