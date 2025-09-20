@@ -45,12 +45,17 @@ jobs:
 
       - name: "4. Démarrage de l'environnement de test complet"
         run: |
-          # Exporter les URIs des images pour qu'elles soient disponibles dans les étapes suivantes
-          echo "BACKEND_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}" >> $GITHUB_ENV
-          echo "FRONTEND_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}" >> $GITHUB_ENV
-          echo "POPULATE_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_POPULATE }}:${{ github.event.inputs.populate_image_tag }}" >> $GITHUB_ENV
+          # Exporter les variables pour le shell de cette étape (pour docker-compose up)
+          export BACKEND_IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}"
+          export FRONTEND_IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}"
+          export POPULATE_IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_POPULATE }}:${{ github.event.inputs.populate_image_tag }}"
+
+          # Sauvegarder les variables pour les étapes suivantes (pour docker-compose down)
+          echo "BACKEND_IMAGE_URI=$BACKEND_IMAGE_URI" >> $GITHUB_ENV
+          echo "FRONTEND_IMAGE_URI=$FRONTEND_IMAGE_URI" >> $GITHUB_ENV
+          echo "POPULATE_IMAGE_URI=$POPULATE_IMAGE_URI" >> $GITHUB_ENV
           
-          echo "Démarrage des conteneurs Docker..."
+          echo "Variables d'images configurées. Démarrage des conteneurs Docker..."
           docker compose -f docker-compose.dast.yml up -d
 
       - name: "5. Attente de la disponibilité de l'application (via le proxy)"
@@ -68,7 +73,7 @@ jobs:
           
           echo "Lancement du tunnel ngrok..."
           ngrok http 8080 --log=stdout > ngrok.log &
-          sleep 10 # Laisse le temps à ngrok de générer l'URL
+          sleep 10
           
           PUBLIC_URL=$(grep -o 'url=https://[a-zA-Z0-9.-]*\.ngrok-free\.app' ngrok.log | cut -d'=' -f2 )
           echo "===================================================================="
