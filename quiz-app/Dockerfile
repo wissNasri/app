@@ -1,24 +1,15 @@
-FROM node:18
+# Contenu final pour : quiz-app/Dockerfile
 
-# Créer un utilisateur non-root
-RUN useradd --user-group --create-home --shell /bin/bash appuser
-
+# ÉTAPE 1: Build de l'application React
+FROM node:20-alpine AS builder
 WORKDIR /app
-
-COPY package.json .
-RUN npm install
-
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
-
 RUN npm run build
 
-# Passer à l'utilisateur non-root
-USER appuser
-
-EXPOSE 8080
-
-# Ajouter un healthcheck
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8080 || exit 1
-
-CMD ["npm", "run", "start"]
+# ÉTAPE 2: Service avec Nginx
+FROM nginx:1.25-alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
