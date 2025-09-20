@@ -359,42 +359,101 @@ jobs:
   # ===================================================================
   # JOB 3: UPDATE MANIFESTS (MODIFIÉ)
   # ===================================================================
-  update-manifests:
-    name: "Deploy: Update Manifests for ArgoCD"
+  # ===================================================================
+  # DÉPLOIEMENT EN STAGING ET SCAN DAST
+  # ===================================================================
+  update-manifests-staging:
+    name: "Deploy to Staging: Update Manifests"
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend,build-populate]
     permissions:
       contents: write
     steps:
-      - name: "Checkout repository to access files"
-        uses: actions/checkout@v4
-      - name: Update manifests and push to Git
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_ACTION_TOKEN }}
+      - name: "Update Staging Manifests"
         run: |
-          git config --global user.name 'wissNasri'
-          git config --global user.email 'wissemnasri81@gmail.com'
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'actions-bot@github.com'
           
-          # MODIFIÉ : Récupération des 3 tags d'image
-          BACKEND_TAG=${{ needs.build-backend.outputs.image_tag_backend }}
-          POPULATE_TAG=${{ needs.build-populate.outputs.image_tag_populate }}
-          FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
+          sed -i 's|\(image: .*/${{ env.ECR_REPOSITORY_BACKEND }}:\).*|\1${{ needs.build-images.outputs.backend_tag }}|' kubernetes-manifest-staging/backend.yaml
+          sed -i 's|\(image: .*/${{ env.ECR_REPOSITORY_FRONTEND }}:\).*|\1${{ needs.build-images.outputs.frontend_tag }}|' kubernetes-manifest-staging/frontend.yaml
+          sed -i 's|\(image: .*/${{ env.ECR_REPOSITORY_POPULATE }}:\).*|\1${{ needs.build-images.outputs.populate_tag }}|' kubernetes-manifest-staging/populate-job.yaml
           
-          if [ -z "$BACKEND_TAG" ] || [ -z "$FRONTEND_TAG" ] || [ -z "$POPULATE_TAG" ]; then
-            echo "Error: Image tags from previous jobs are empty. Aborting."
-            exit 1
-          fi
-          
-          # MODIFIÉ : Mise à jour des 3 fichiers manifestes
-          sed -i "s|\(image: .*iovision-repo:\).*|\1$BACKEND_TAG|" kubernetes-manifest/backend.yaml
-          sed -i "s|\(image: .*quiz-app-repo:\).*|\1$FRONTEND_TAG|" kubernetes-manifest/frontend.yaml
-          sed -i "s|\(image: .*populate-repo:\).*|\1$POPULATE_TAG|" kubernetes-manifest/populate-job.yaml
-          
-          git add kubernetes-manifest/backend.yaml kubernetes-manifest/frontend.yaml kubernetes-manifest/populate-job.yaml
-          
+          git add kubernetes-manifest-staging/
           if git diff --cached --quiet; then
-            echo "No changes to commit."
+            echo "No changes to commit for staging."
           else
-            COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
-            git commit -m "ci(deploy): Update image tags to ${COMMIT_SHA}"
+            git commit -m "ci(staging): Deploy images for commit ${{ github.sha }}"
+            git push
+          fi
+
+  wait-for-staging-deployment:
+    name: "Wait for Staging URL"
+    runs-on: ubuntu-latest
+    needs: update-manifests-staging
+    steps:
+      - name: "Wait for application to become available"
+        run: |
+          echo "Waiting 2 minutes for ArgoCD sync and ALB initialization..."
+          sleep 120
+          echo "Checking staging URL availability..."
+          curl --retry 18 --retry-delay 10 --retry-connrefused --silent --show-error --fail "https://quiz-staging.iovision.site"
+          echo "Staging URL is now accessible!"
+
+  dast-scan:
+    name: "DAST Scan (Staging )"
+    runs-on: ubuntu-latest
+    needs: wait-for-staging-deployment
+    steps:
+      - name: "Run OWASP ZAP Full Scan"
+        uses: zaproxy/action-full-scan@v0.12.0
+        with:
+          target: 'https://quiz-staging.iovision.site'
+          artifact_name: 'zap-scan-report'
+          allow_issue_writing: true
+          issue_title: 'DAST Scan Report - ${{ github.workflow }} #${{ github.run_number }}'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fail_action: true
+
+  # ===================================================================
+  # PROMOTION MANUELLE VERS LA PRODUCTION
+  # ===================================================================
+  update-manifests-production:
+    name: "Promote to Production: Update Manifests"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_to_production == true
+    needs: [dast-scan]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_ACTION_TOKEN }}
+          fetch-depth: 0
+      - name: "Get Image Tags from Latest Main Commit"
+        id: get-tags
+        run: |
+          LATEST_SHA=$(git rev-parse origin/main )
+          SHA_SHORT=$(echo $LATEST_SHA | cut -c1-8)
+          echo "BACKEND_TAG=backend-${SHA_SHORT}" >> $GITHUB_ENV
+          echo "FRONTEND_TAG=frontend-${SHA_SHORT}" >> $GITHUB_ENV
+          echo "POPULATE_TAG=populate-${SHA_SHORT}" >> $GITHUB_ENV
+          echo "LATEST_SHA_ENV=$LATEST_SHA" >> $GITHUB_ENV
+      - name: "Update Production Manifests"
+        run: |
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'actions-bot@github.com'
+          
+          sed -i 's|\(image: .*/${{ env.ECR_REPOSITORY_BACKEND }}:\).*|\1${{ env.BACKEND_TAG }}|' kubernetes-manifest/backend.yaml
+          sed -i 's|\(image: .*/${{ env.ECR_REPOSITORY_FRONTEND }}:\).*|\1${{ env.FRONTEND_TAG }}|' kubernetes-manifest/frontend.yaml
+          sed -i 's|\(image: .*/${{ env.ECR_REPOSITORY_POPULATE }}:\).*|\1${{ env.POPULATE_TAG }}|' kubernetes-manifest/populate-job.yaml
+          
+          git add kubernetes-manifest/
+          if git diff --cached --quiet; then
+            echo "Production manifests are already up-to-date."
+          else
+            git commit -m "ci(prod): Promote commit ${{ env.LATEST_SHA_ENV }} to production"
             git push
           fi
 
@@ -402,7 +461,6 @@ jobs:
   # JOB 4: K8S MANIFEST SCAN (MODIFIÉ)
   # ===================================================================
   k8s-manifest-scan:
-    needs: update-manifests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -438,7 +496,6 @@ jobs:
   # NOUVEAU JOB : GITLEAKS SCAN POUR LES MANIFESTES
   # ===================================================================
   gitleaks-scan-manifests:
-    needs: update-manifests
     name: Gitleaks Analysis (kubernetes-manifest)
     runs-on: ubuntu-latest
     container:
