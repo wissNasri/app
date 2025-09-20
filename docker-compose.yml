@@ -1,0 +1,69 @@
+version: '3.8'
+
+# Fichier docker-compose pour l'environnement de test DAST local.
+# Il construit les images à la volée et lie les services.
+
+services:
+  # --- Service Backend (API Node.js) ---
+  backend:
+    build:
+      context: ./backend      # Chemin vers le dossier du backend
+      dockerfile: Dockerfile  # Utilise le Dockerfile standard du backend
+    container_name: quiz-backend
+    ports:
+      - "3000:3000"           # Expose le port pour un débogage éventuel
+    environment:
+      # L'URI pointe vers le nom du service 'mongo' dans ce fichier
+      - MONGO_URI=mongodb://mongo:27017/quizdb
+    depends_on:
+      - mongo                 # Attend que la base de données soit prête
+    networks:
+      - quiz-net
+
+  # --- Service Frontend (React) ---
+  frontend:
+    build:
+      context: ./quiz-app     # Chemin vers le dossier du frontend
+      dockerfile: Dockerfile
+    container_name: quiz-frontend
+    ports:
+      - "8080:8080"           # Expose le port pour le scan DAST
+    environment:
+      # Crucial : Le frontend appelle le backend via son nom de service
+      - VITE_REACT_APP_API_URL=http://backend:3000
+    depends_on:
+      - backend               # Attend que l'API soit prête
+    networks:
+      - quiz-net
+
+  # --- Service Base de données (MongoDB ) ---
+  mongo:
+    image: mongo:4.4.6        # Utilise une image officielle pour la simplicité
+    container_name: quiz-mongo
+    volumes:
+      - mongo-data:/data/db   # Persiste les données entre les lancements
+    networks:
+      - quiz-net
+
+  # --- Tâche d'initialisation de la base de données ---
+  populate-db:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.populate # Utilise le Dockerfile dédié à cette tâche
+    container_name: quiz-populate
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/quizdb
+    depends_on:
+      - mongo                 # S'exécute uniquement après le démarrage de mongo
+    networks:
+      - quiz-net
+    # Ce conteneur s'arrêtera de lui-même une fois le script terminé.
+
+# Réseau partagé pour la communication entre les conteneurs
+networks:
+  quiz-net:
+    driver: bridge
+
+# Volume pour stocker les données de MongoDB
+volumes:
+  mongo-data:
