@@ -18,7 +18,7 @@ jobs:
       - name: 2. Construire et lancer les services avec Docker Compose
         run: |
           echo "Construction des images et démarrage de la pile applicative (avec Nginx)..."
-          docker compose -f app/docker-compose.yml up --build -d
+          docker compose -f docker-compose.yml up --build -d
 
       - name: 3. Attendre que Nginx soit prêt
         run: |
@@ -55,7 +55,7 @@ jobs:
         if: always()
         run: |
           echo "Arrêt des conteneurs Docker..."
-          docker compose -f app/docker-compose.yml down
+          docker compose -f docker-compose.yml down
           echo "Arrêt de l'agent ngrok..."
           # On s'assure que le processus ngrok est bien terminé
           pkill ngrok || true
