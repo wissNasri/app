@@ -1,22 +1,27 @@
 version: '3.8'
 
+# Fichier docker-compose final pour le test DAST avec Nginx.
+
 services:
-  # --- NOUVEAU : Service Nginx Reverse Proxy ---
+  # --- Service Nginx (Point d'entrée unique) ---
   nginx:
     image: nginx:latest
     container_name: quiz-nginx-proxy
     ports:
-      - "80:80" # On expose le port 80 de Nginx sur la machine hôte. C'est ce port que ngrok va utiliser.
+      - "80:80" # Seul port exposé à l'extérieur (vers le runner et ngrok).
     volumes:
-      # On monte notre fichier de configuration dans le conteneur Nginx.
+      # Monte notre fichier de configuration personnalisé dans le conteneur.
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
     depends_on:
-      - frontend
-      - backend
+      # Nginx ne démarrera que lorsque le backend et le frontend seront "sains".
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
     networks:
       - quiz-net
 
-  # --- Service Backend (inchangé) ---
+  # --- Service Backend (API) ---
   backend:
     build:
       context: ./backend
@@ -25,27 +30,39 @@ services:
     environment:
       - MONGO_URI=mongodb://mongo:27017/quizdb
     depends_on:
-      - mongo
+      mongo:
+        condition: service_started
     networks:
       - quiz-net
-    # Pas besoin d'exposer de port ici, Nginx s'en charge.
+    # Healthcheck : Vérifie si le service backend est prêt à recevoir des requêtes.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # --- Service Frontend (modifié) ---
+  # --- Service Frontend (Interface utilisateur ) ---
   frontend:
     build:
       context: ./quiz-app
       dockerfile: Dockerfile
     container_name: quiz-frontend
     environment:
-      # IMPORTANT : L'URL de l'API est maintenant relative, car Nginx gère la redirection.
+      # L'URL de l'API est relative. Nginx s'occupera de la redirection.
       - VITE_REACT_APP_API_URL=/api
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - quiz-net
-    # Pas besoin d'exposer de port ici, Nginx s'en charge.
+    # Healthcheck : Vérifie si le serveur de développement du frontend est prêt.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # --- Services mongo et populate-db (inchangés) ---
+  # --- Service Base de données ---
   mongo:
     image: mongo:4.4.6
     container_name: quiz-mongo
@@ -54,6 +71,7 @@ services:
     networks:
       - quiz-net
 
+  # --- Tâche d'initialisation de la base de données ---
   populate-db:
     build:
       context: ./backend
@@ -62,13 +80,16 @@ services:
     environment:
       - MONGO_URI=mongodb://mongo:27017/quizdb
     depends_on:
-      - mongo
+      mongo:
+        condition: service_started
     networks:
       - quiz-net
 
+# Réseau commun pour tous les services
 networks:
   quiz-net:
     driver: bridge
 
+# Volume pour la persistance des données MongoDB
 volumes:
   mongo-data:
