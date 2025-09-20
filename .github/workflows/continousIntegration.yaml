@@ -3,8 +3,7 @@ name: React.js CI + Semgrep
 on:
   push:
     branches:
-      - master
-      
+      - main
     paths:
       - 'backend/**'
       - 'quiz-app/**'
@@ -357,119 +356,45 @@ jobs:
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
-
-
-    # ===================================================================
-  # NOUVEAU JOB AJOUTÉ : DAST SCAN
-  # ===================================================================
-  dast-scan:
-    name: "DAST Scan with ZAP and Ngrok"
-    runs-on: ubuntu-latest
-    needs: [build-backend, build-populate, build-frontend]
-    
-    # AJOUT : Permissions nécessaires pour l'authentification AWS OIDC
-    permissions:
-      id-token: write
-      contents: read
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # ===================================================================
-      # AJOUT : ÉTAPES D'AUTHENTIFICATION AUPRÈS D'AWS ET ECR
-      # ===================================================================
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::228578233417:role/oicd
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
-      # ===================================================================
-
-      - name: Build Frontend Image for DAST
-        run: docker build -t local/frontend-dast:latest ./quiz-app
-
-      - name: Replace Image Tags in Docker Compose
-        run: |
-          sed -i 's|BACKEND_IMAGE_TAG|${{ needs.build-backend.outputs.image_tag_backend }}|' docker-compose.dast.yml
-          sed -i 's|POPULATE_IMAGE_TAG|${{ needs.build-populate.outputs.image_tag_populate }}|' docker-compose.dast.yml
-
-      - name: Start Services
-        run: docker compose -f docker-compose.dast.yml up -d mongo backend frontend
-
-      - name: Wait for services
-        run: echo "Waiting for services..." && sleep 45
-
-      - name: Populate Database
-        run: docker compose -f docker-compose.dast.yml run --rm populate
-
-      - name: Setup and Expose with Ngrok
-        run: |
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-          sudo apt update && sudo apt install -y ngrok
-          ngrok config add-authtoken ${{ secrets.NGROK_AUTHTOKEN }}
-          ngrok http 8080 --log=stdout > ngrok.log &
-          sleep 10
-          export NGROK_URL=$(grep -o 'url=https://[a-zA-Z0-9.-]*\.ngrok-free.app' ngrok.log | cut -d'=' -f2 )
-          echo "Application is live for inspection at: $NGROK_URL"
-          echo "NGROK_PUBLIC_URL=$NGROK_URL" >> $GITHUB_ENV
-
-      # ===================================================================
-      - name: Run ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.12.0
-        with:
-          # URL de votre application exposée par Ngrok
-          target: ${{ env.NGROK_PUBLIC_URL }}
-          # Vous pouvez laisser les autres options par défaut pour un premier test
-          # fail_action: true # Mettez ceci à 'true' plus tard pour faire échouer le pipeline si des vulnérabilités sont trouvées
-
-      - name: Stop Application Stack
-        if: always()
-        run: docker compose -f docker-compose.dast.yml down
-
   # ===================================================================
   # JOB 3: UPDATE MANIFESTS (MODIFIÉ)
   # ===================================================================
-  update-manifests:
-    name: "Deploy: Update Manifests for ArgoCD"
+  update-manifests: # ANCIENNEMENT 'update-manifests'
+    name: "Deploy: Update STAGING Manifests"
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend,build-populate]
+    needs: [build-backend, build-frontend, build-populate]
     permissions:
       contents: write
     steps:
       - name: "Checkout repository to access files"
         uses: actions/checkout@v4
-      - name: Update manifests and push to Git
+        with:
+          # On a besoin d'un token pour pouvoir pousser les changements
+          token: ${{ secrets.GITHUB_TOKEN }} 
+      - name: "Update STAGING manifests and push to Git"
         run: |
+          # On utilise une identité de bot pour les commits automatiques
           git config --global user.name 'wissNasri'
           git config --global user.email 'wissemnasri81@gmail.com'
           
-          # MODIFIÉ : Récupération des 3 tags d'image
+          # Récupération des tags d'image des jobs précédents
           BACKEND_TAG=${{ needs.build-backend.outputs.image_tag_backend }}
           POPULATE_TAG=${{ needs.build-populate.outputs.image_tag_populate }}
           FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
           
-          if [ -z "$BACKEND_TAG" ] || [ -z "$FRONTEND_TAG" ] || [ -z "$POPULATE_TAG" ]; then
-            echo "Error: Image tags from previous jobs are empty. Aborting."
-            exit 1
-          fi
+          # On met à jour les fichiers de STAGING, pas les fichiers de production
+          sed -i "s|\(image: .*iovision-repo:\).*|\1${BACKEND_TAG}|" kubernetes-manifest/backend-staging.yaml
+          sed -i "s|\(image: .*quiz-app-repo:\).*|\1${FRONTEND_TAG}|" kubernetes-manifest/frontend-staging.yaml
+          sed -i "s|\(image: .*populate-repo:\).*|\1${POPULATE_TAG}|" kubernetes-manifest/populate-job-staging.yaml
           
-          # MODIFIÉ : Mise à jour des 3 fichiers manifestes
-          sed -i "s|\(image: .*iovision-repo:\).*|\1$BACKEND_TAG|" kubernetes-manifest/backend.yaml
-          sed -i "s|\(image: .*quiz-app-repo:\).*|\1$FRONTEND_TAG|" kubernetes-manifest/frontend.yaml
-          sed -i "s|\(image: .*populate-repo:\).*|\1$POPULATE_TAG|" kubernetes-manifest/populate-job.yaml
-          
-          git add kubernetes-manifest/backend.yaml kubernetes-manifest/frontend.yaml kubernetes-manifest/populate-job.yaml
+          # On ajoute tous les fichiers de staging au commit
+          git add kubernetes-manifest/*-staging.yaml
           
           if git diff --cached --quiet; then
-            echo "No changes to commit."
+            echo "No changes to commit in staging manifests."
           else
             COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
-            git commit -m "ci(deploy): Update image tags to ${COMMIT_SHA}"
+            git commit -m "ci(staging): Deploy image tag ${COMMIT_SHA} to staging"
             git push
           fi
 
@@ -534,3 +459,28 @@ jobs:
         with:
           name: gitleaks-json-manifests-report
           path: ./kubernetes-manifest/gitleaks-report-manifests.json
+  dast-scan:
+    name: "DAST Scan (OWASP ZAP on Staging)"
+    # Ce job s'exécute à la toute fin, après le déploiement sur staging
+    needs: [k8s-manifest-scan, gitleaks-scan-manifests]
+    runs-on: ["self-hosted", "aws-private-runner"] # S'exécute sur votre runner EC2
+    steps:
+      - name: "Wait for ArgoCD to sync Staging Environment"
+        run: |
+          echo "Waiting 120 seconds for ArgoCD to deploy the new version to the 'quiz-staging' namespace..."
+          sleep 120
+      - name: "Run OWASP ZAP Baseline Scan on Staging"
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          # Cible : l'URL de votre environnement de staging
+          target: 'https://staging-quiz.iovision.site/'
+          cmd_options: '-r zap_report.html'
+          # Fait échouer le pipeline si une faille est trouvée. C'est la porte de sécurité.
+          fail_action: true
+      - name: "Upload ZAP Report"
+        # s'exécute toujours pour que vous ayez le rapport, même en cas d'échec
+        if: always( )
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-dast-report
+          path: zap_report.html
