@@ -8,7 +8,7 @@ spec:
     spec:
       containers:
       - name: populator
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/populate-repo:latest # Sera mis à jour par la CI
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/populate-repo:populate-ce41dc73
         env:
         - name: MONGO_URI
           valueFrom:

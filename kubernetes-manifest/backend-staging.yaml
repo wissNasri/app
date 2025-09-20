@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/iovision-repo:latest # Sera mis à jour par la CI
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/iovision-repo:backend-ce41dc73
         ports:
         - containerPort: 3000
         env:
