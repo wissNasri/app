@@ -1,40 +1,56 @@
 version: '3.8'
 
 services:
+  # --- NOUVEAU SERVICE : Le Reverse Proxy Nginx ---
+  proxy:
+    image: nginx:1.25-alpine
+    container_name: dast-proxy
+    # On expose le port 80 du proxy au port 8080 de la machine hôte
+    ports:
+      - "8080:80"
+    # On monte notre fichier de configuration dans le conteneur Nginx
+    volumes:
+      - ./dast-proxy/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - dast-network
+
+  # 1. Le service Backend (plus besoin d'exposer son port)
   backend:
     image: ${BACKEND_IMAGE_URI}
     container_name: dast-backend
     environment:
       - MONGO_URI=mongodb://mongo:27017/quizdb
-    # --- CORRECTION --- : On expose le port du backend
-    ports:
-      - "3000:3000"
     depends_on:
       populate:
         condition: service_completed_successfully
     networks:
       - dast-network
 
+  # 2. Le service Frontend (plus besoin d'exposer son port)
   frontend:
     image: ${FRONTEND_IMAGE_URI}
     container_name: dast-frontend
-    ports:
-      - "8080:8080"
     environment:
-      # --- CORRECTION --- : L'URL du backend pointe maintenant vers localhost
-      # Le frontend (dans le navigateur) appellera le backend via le port exposé sur la machine hôte.
-      - VITE_REACT_APP_API_URL=http://localhost:3000/api
+      # --- CORRECTION CRUCIALE ---
+      # Le frontend appelle maintenant une URL relative.
+      # Nginx se chargera de la redirection.
+      - VITE_REACT_APP_API_URL=/api
     depends_on:
       - backend
     networks:
       - dast-network
 
+  # 3. Le service Base de Données MongoDB (inchangé)
   mongo:
     image: mongo:4.4.6
     container_name: dast-mongo
     networks:
       - dast-network
 
+  # 4. Le service de peuplement (inchangé)
   populate:
     image: ${POPULATE_IMAGE_URI}
     container_name: dast-populate
