@@ -1,5 +1,3 @@
-# kubernetes-manifest/frontend.yaml
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -11,7 +9,6 @@ spec:
   replicas: 1
   strategy:
     type: RollingUpdate
-    
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 25%
@@ -25,14 +22,12 @@ spec:
     spec:
       containers:
       - name: frontend
-        # L'image sera mise à jour par le pipeline
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/quiz-app-repo:frontend-dfcf6f90
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/quiz-app-repo:frontend-8a6d1a28
         envFrom:
         - configMapRef:
             name: quiz-app-config
         ports:
-        # CORRECTION : Le conteneur écoute sur le port 80
-        - containerPort: 80
+        - containerPort: 8080
 ---
 apiVersion: v1
 kind: Service
@@ -43,8 +38,6 @@ spec:
   selector:
     app: frontend
   ports:
-  # CORRECTION : Le service doit cibler le port 80 du conteneur
-  - port: 8080 # Le service peut toujours exposer le port 8080...
-    targetPort: 80 # ...mais il doit rediriger le trafic vers le port 80 du pod.
+  - port: 8080
     protocol: TCP
   type: ClusterIP
