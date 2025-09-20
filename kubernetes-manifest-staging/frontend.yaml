@@ -7,11 +7,6 @@ metadata:
     app: frontend
 spec:
   replicas: 1
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 25%
   selector:
     matchLabels:
       app: frontend
@@ -22,7 +17,8 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/quiz-app-repo:frontend-8a6d1a28
+        # Le tag de l'image sera remplacé par la pipeline CI/CD
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/quiz-app-repo:latest
         envFrom:
         - configMapRef:
             name: quiz-app-config
