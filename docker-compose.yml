@@ -1,18 +1,18 @@
-version: '3.8'
-
-# Fichier docker-compose simplifié pour le débogage, sans healthchecks.
+# Fichier docker-compose final et nettoyé.
+# La directive 'version' est obsolète et a été retirée.
 
 services:
-  # --- Service Nginx ---
+  # --- Service Nginx (Point d'entrée unique) ---
   nginx:
     image: nginx:latest
     container_name: quiz-nginx-proxy
     ports:
-      - "80:80"
+      - "80:80" # Seul port exposé à l'extérieur.
     volumes:
+      # Monte notre fichier de configuration personnalisé dans le conteneur.
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
     depends_on:
-      # On attend simplement que les services soient démarrés.
+      # Attend simplement que les conteneurs backend et frontend soient démarrés.
       backend:
         condition: service_started
       frontend:
@@ -33,7 +33,6 @@ services:
         condition: service_started
     networks:
       - quiz-net
-    # Le bloc 'healthcheck' a été supprimé.
 
   # --- Service Frontend (Interface utilisateur) ---
   frontend:
@@ -42,13 +41,14 @@ services:
       dockerfile: Dockerfile
     container_name: quiz-frontend
     environment:
-      - VITE_REACT_APP_API_URL=/api
+      # Syntaxe correcte pour la variable d'environnement.
+      # C'est cette valeur qui sera utilisée par le code React.
+      VITE_REACT_APP_API_URL: /api
     depends_on:
       backend:
         condition: service_started
     networks:
       - quiz-net
-    # Le bloc 'healthcheck' a été supprimé.
 
   # --- Service Base de données ---
   mongo:
