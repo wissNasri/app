@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: quiz-staging
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 25%
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/iovision-repo:backend-dfcf6f90
+        ports:
+        - containerPort: 3000
+        env:
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: mongo-secret
+              key: mongo-uri
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: quiz-staging
+spec:
+  selector:
+    app: backend
+  ports:
+  - port: 3000
+    protocol: TCP
+  type: ClusterIP
+  
