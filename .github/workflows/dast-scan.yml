@@ -45,7 +45,7 @@ jobs:
 
       - name: "4. Création de la config Nginx et démarrage de l'environnement"
         run: |
-          # --- SOLUTION DÉFINITIVE : CRÉATION DU FICHIER NGINX À LA VOLÉE ---
+          # Création de la configuration Nginx à la volée pour garantir sa présence
           echo "Création de la configuration Nginx..."
           mkdir -p dast-proxy
           cat <<'EOF' > dast-proxy/nginx.conf
@@ -71,14 +71,11 @@ jobs:
           }
           EOF
           echo "Configuration Nginx créée avec succès."
-          # --- FIN DE LA CRÉATION DU FICHIER ---
 
-          # Exporter les variables pour le shell de cette étape (pour docker-compose up )
+          # Exporter et sauvegarder les URIs des images
           export BACKEND_IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}"
           export FRONTEND_IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}"
           export POPULATE_IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_POPULATE }}:${{ github.event.inputs.populate_image_tag }}"
-
-          # Sauvegarder les variables pour les étapes suivantes (pour docker-compose down)
           echo "BACKEND_IMAGE_URI=$BACKEND_IMAGE_URI" >> $GITHUB_ENV
           echo "FRONTEND_IMAGE_URI=$FRONTEND_IMAGE_URI" >> $GITHUB_ENV
           echo "POPULATE_IMAGE_URI=$POPULATE_IMAGE_URI" >> $GITHUB_ENV
@@ -86,7 +83,7 @@ jobs:
           echo "Démarrage des conteneurs Docker..."
           docker compose -f docker-compose.dast.yml up -d
 
-      - name: "5. Attente de la disponibilité de l'application (via le proxy)"
+      - name: "5. Attente de la disponibilité de l'application (via le proxy )"
         run: |
           echo "Attente du proxy sur http://localhost:8080..."
           timeout 120s bash -c 'until curl -s --head --fail http://localhost:8080 > /dev/null; do echo "En attente..."; sleep 5; done'
@@ -123,6 +120,22 @@ jobs:
               -r dast-report.html \
               -w dast-report.md \
               -l WARN
+
+      # --- NOUVELLE ÉTAPE DE DÉBOGAGE ---
+      - name: "Debug: Afficher les logs des conteneurs"
+        if: always() # S'exécute toujours pour nous donner des informations
+        run: |
+          echo "--- Logs du Proxy Nginx (dast-proxy) ---"
+          docker logs dast-proxy
+          
+          echo "--- Logs du Frontend (dast-frontend) ---"
+          docker logs dast-frontend
+          
+          echo "--- Logs du Backend (dast-backend) ---"
+          docker logs dast-backend
+          
+          echo "--- Logs de la Base de Données (dast-mongo) ---"
+          docker logs dast-mongo
 
       - name: "8. Upload du rapport DAST"
         uses: actions/upload-artifact@v4
