@@ -12,28 +12,32 @@ jobs:
     name: Lancer, Exposer avec Nginx/ngrok et Scanner
 
     steps:
-      - name: 1. Cloner le code du projet dans un dossier 'source'
+      # Étape 1 : Cloner le projet.
+      - name: 1. Cloner le code du projet
         uses: actions/checkout@v4
-        with:
-          # CORRECTION : On force la destination du clonage
-          path: 'source'
 
+      # Étape 2 : Lancer les conteneurs.
       - name: 2. Construire et lancer les services avec Docker Compose
-        # CORRECTION : On utilise le chemin 'source' comme répertoire de travail
-        working-directory: ./source
         run: |
-          echo "Construction des images et démarrage de la pile applicative (avec Nginx)..."
+          echo "Construction des images et démarrage de la pile applicative..."
+          # La commande est lancée à la racine du projet cloné.
           docker compose up --build -d
 
-      - name: 3. Attendre que Nginx soit prêt
-        working-directory: ./source
+      # Étape 3 : Attendre Nginx, avec affichage des logs en cas d'échec.
+      - name: 3. Attendre que Nginx soit prêt (avec débogage )
         run: |
           echo "Attente du démarrage du reverse proxy Nginx sur le port 80..."
-          timeout 120s bash -c 'until curl -s http://localhost:80 > /dev/null; do echo "En attente de Nginx..."; sleep 5; done'
+          # Boucle de vérification robuste.
+          if ! timeout 120s bash -c 'until curl -sf http://localhost:80 > /dev/null; do echo "En attente de Nginx..."; docker compose ps; sleep 5; done'; then
+            echo "ERREUR: Nginx n'a pas démarré à temps."
+            echo "--- AFFICHAGE DES LOGS DU CONTENEUR NGINX ---"
+            docker compose logs nginx
+            exit 1
+          fi
           echo "Nginx est prêt !"
 
+      # Étape 4 : Lancer ngrok.
       - name: 4. Installer et lancer ngrok
-        working-directory: ./source
         env:
           NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
         run: |
@@ -42,8 +46,8 @@ jobs:
           ngrok http 80 --log=stdout > ngrok.log &
           sleep 5
 
+      # Étape 5 : Récupérer l'URL publique pour le scan.
       - name: 5. Afficher l'URL publique et la définir pour le scan
-        working-directory: ./source
         id: scan
         run: |
           PUBLIC_URL=$(grep -o 'url=https://[0-9a-zA-Z.-]*\.ngrok-free\.app' ngrok.log | cut -d'=' -f2 )
@@ -53,14 +57,15 @@ jobs:
           echo "################################################"
           echo "public_url=$PUBLIC_URL" >> $GITHUB_OUTPUT
 
+      # Étape 6 : Lancer le scan DAST.
       - name: 6. Lancer le scan de sécurité DAST (OWASP ZAP)
         uses: zaproxy/action-baseline@v0.11.0
         with:
           target: ${{ steps.scan.outputs.public_url }}
           
+      # Étape 7 : Arrêter tous les services.
       - name: 7. Arrêter tous les services
         if: always()
-        working-directory: ./source
         run: |
           echo "Arrêt des conteneurs Docker..."
           docker compose down
