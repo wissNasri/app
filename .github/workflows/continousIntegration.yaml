@@ -428,7 +428,7 @@ jobs:
 
       - name: Stop Application Stack
         if: always()
-        run: docker-compose -f docker-compose.dast.yml down
+        run: docker compose -f docker-compose.dast.yml down
 
   # ===================================================================
   # JOB 3: UPDATE MANIFESTS (MODIFIÉ)
