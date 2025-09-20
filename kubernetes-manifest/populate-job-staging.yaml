@@ -1,0 +1,19 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: populate-db-job-staging
+  namespace: quiz-staging
+spec:
+  template:
+    spec:
+      containers:
+      - name: populator
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/populate-repo:latest # Sera mis à jour par la CI
+        env:
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: mongo-secret-staging
+              key: mongo-uri
+      restartPolicy: Never
+  backoffLimit: 4
