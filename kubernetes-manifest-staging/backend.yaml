@@ -7,11 +7,6 @@ metadata:
     app: backend
 spec:
   replicas: 1
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 25%
   selector:
     matchLabels:
       app: backend
@@ -22,7 +17,8 @@ spec:
     spec:
       containers:
       - name: backend
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/iovision-repo:backend-dfcf6f90
+        # Le tag de l'image sera remplacé par la pipeline CI/CD
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/iovision-repo:latest
         ports:
         - containerPort: 3000
         env:
@@ -44,4 +40,3 @@ spec:
   - port: 3000
     protocol: TCP
   type: ClusterIP
-  
