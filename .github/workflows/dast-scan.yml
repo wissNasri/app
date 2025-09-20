@@ -1,4 +1,4 @@
-name: DAST Scan avec Docker Compose et ngrok
+name: DAST Scan avec Docker Compose et ngrok (Manuel)
 
 on:
   push:
@@ -26,34 +26,40 @@ jobs:
           timeout 120s bash -c 'until curl -s http://localhost:8080 > /dev/null; do echo "En attente du frontend..."; sleep 5; done'
           echo "Le frontend est prêt !"
 
-      # --- NOUVELLES ÉTAPES POUR NGROK ---
-      - name: 4. Exposer l'application avec ngrok
-        uses: ngrok/ngrok-action@v1
-        with:
-          # Utilise le secret que vous venez de configurer dans GitHub
-          authtoken: ${{ secrets.NGROK_AUTHTOKEN }}
-          # Expose le port 8080 (celui du frontend )
-          port: 8080
-          # Stocke l'URL générée dans un fichier pour l'afficher plus tard
-          log: "ngrok.log"
+      # --- NOUVELLE MÉTHODE MANUELLE POUR NGROK ---
+      - name: 4. Installer et configurer ngrok
+        env:
+          # On récupère le jeton depuis les secrets GitHub
+          NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+        run: |
+          # Télécharge et décompresse ngrok
+          curl -s https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz | sudo tar xvz -C /usr/local/bin
+          # Configure le jeton d'authentification
+          ngrok config add-authtoken $NGROK_AUTHTOKEN
 
-      - name: 5. Afficher l'URL publique ngrok
+      - name: 5. Lancer ngrok en arrière-plan
+        run: |
+          # Lance le tunnel pour le port 8080 et redirige les logs vers un fichier
+          # Le '&' à la fin exécute la commande en arrière-plan
+          ngrok http 8080 --log=stdout > ngrok.log &
+          # Laisse un peu de temps à ngrok pour démarrer et générer l'URL
+          sleep 5
+
+      - name: 6. Afficher l'URL publique ngrok
         run: |
           echo "################################################"
           echo "## L'application est accessible publiquement à l'adresse suivante :"
-          cat ngrok.log
+          # On extrait l'URL du fichier de log de ngrok
+          grep -o 'url=https://[0-9a-zA-Z.-]*\.ngrok-free\.app' ngrok.log | cut -d'=' -f2
           echo "################################################"
-          
-      # --- FIN DES NOUVELLES ÉTAPES ---
+      # --- FIN DE LA MÉTHODE MANUELLE ---
 
-      - name: 6. Lancer le scan de sécurité DAST (OWASP ZAP)
+      - name: 7. Lancer le scan de sécurité DAST (OWASP ZAP )
         uses: zaproxy/action-baseline@v0.11.0
         with:
-          # ZAP peut maintenant utiliser soit localhost, soit l'URL ngrok.
-          # Utilisons localhost car c'est plus direct et rapide pour le scan.
           target: 'http://localhost:8080'
           
-      - name: 7. Arrêter les services Docker Compose
+      - name: 8. Arrêter les services Docker Compose
         if: always( )
         run: |
           echo "Arrêt des conteneurs..."
