@@ -1,4 +1,4 @@
-name: DAST Scan avec Nginx Reverse Proxy
+name: DAST Scan avec Nginx Reverse Proxy (Débogage Final)
 
 on:
   push:
@@ -23,14 +23,27 @@ jobs:
       - name: 3. Attendre que Nginx soit prêt
         run: |
           echo "Attente du démarrage du reverse proxy Nginx sur le port 80..."
-          # Boucle de vérification robuste.
-          if ! timeout 120s bash -c 'until curl -sf http://localhost:80 > /dev/null; do echo "En attente de Nginx..."; sleep 5; done'; then
-            echo "ERREUR: Nginx n'a pas démarré à temps. Affichage des logs de tous les services..."
+          if ! timeout 60s bash -c 'until curl -sf http://localhost:80 > /dev/null; do echo "En attente de Nginx..."; sleep 5; done'; then
+            echo "ERREUR: Nginx n'a pas démarré à temps. Affichage des logs..."
             docker compose logs
             exit 1
           fi
           echo "Nginx est prêt !"
 
+      # --- ÉTAPE DE DÉBOGAGE DÉCISIVE ---
+      - name: 3.5. Tester la route API directement avec cURL
+        run: |
+          echo "############################################################"
+          echo "## TEST DIRECT DE LA ROUTE /api/questions VIA NGINX ##"
+          echo "############################################################"
+          # La commande -v (verbeux ) nous montrera les en-têtes de la requête et de la réponse.
+          # On saura exactement ce que Nginx nous renvoie.
+          curl -v http://localhost:80/api/questions
+          echo "############################################################"
+          echo "## FIN DU TEST DIRECT ##"
+          echo "############################################################"
+
+      # ... reste du pipeline inchangé ...
       - name: 4. Installer et lancer ngrok
         env:
           NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
@@ -44,10 +57,7 @@ jobs:
         id: scan
         run: |
           PUBLIC_URL=$(grep -o 'url=https://[0-9a-zA-Z.-]*\.ngrok-free\.app' ngrok.log | cut -d'=' -f2 )
-          echo "################################################"
-          echo "## L'application est accessible à l'adresse suivante :"
-          echo "## $PUBLIC_URL"
-          echo "################################################"
+          echo "## L'application est accessible à l'adresse suivante : $PUBLIC_URL"
           echo "public_url=$PUBLIC_URL" >> $GITHUB_OUTPUT
 
       - name: 6. Lancer le scan de sécurité DAST (OWASP ZAP)
