@@ -30,7 +30,7 @@ jobs:
       contents: read
 
     steps:
-      - name: "1. Checkout du code (incluant la config Nginx)"
+      - name: "1. Checkout du code"
         uses: actions/checkout@v4
 
       - name: "2. Configuration des accès AWS"
@@ -43,28 +43,48 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: "4. Démarrage de l'environnement de test complet"
+      - name: "4. Création de la config Nginx et démarrage de l'environnement"
         run: |
-          # Exporter les variables pour le shell de cette étape
+          # --- SOLUTION DÉFINITIVE : CRÉATION DU FICHIER NGINX À LA VOLÉE ---
+          echo "Création de la configuration Nginx..."
+          mkdir -p dast-proxy
+          cat <<'EOF' > dast-proxy/nginx.conf
+          server {
+              listen 80;
+              server_name localhost;
+
+              location / {
+                  proxy_pass http://frontend:8080;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+
+              location /api/ {
+                  proxy_pass http://backend:3000;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+          }
+          EOF
+          echo "Configuration Nginx créée avec succès."
+          # --- FIN DE LA CRÉATION DU FICHIER ---
+
+          # Exporter les variables pour le shell de cette étape (pour docker-compose up )
           export BACKEND_IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}"
           export FRONTEND_IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}"
           export POPULATE_IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_POPULATE }}:${{ github.event.inputs.populate_image_tag }}"
 
-          # Sauvegarder les variables pour les étapes suivantes
+          # Sauvegarder les variables pour les étapes suivantes (pour docker-compose down)
           echo "BACKEND_IMAGE_URI=$BACKEND_IMAGE_URI" >> $GITHUB_ENV
           echo "FRONTEND_IMAGE_URI=$FRONTEND_IMAGE_URI" >> $GITHUB_ENV
           echo "POPULATE_IMAGE_URI=$POPULATE_IMAGE_URI" >> $GITHUB_ENV
           
-          # --- ÉTAPE DE DÉBOGAGE CRUCIALE ---
-          echo "Vérification de la structure des fichiers avant de lancer Docker..."
-          ls -lR
-          # Cette commande va lister tous les fichiers et dossiers, montrant si
-          # le chemin 'dast-proxy/nginx.conf' est correct.
-          
           echo "Démarrage des conteneurs Docker..."
           docker compose -f docker-compose.dast.yml up -d
-
-      # ... Le reste du fichier reste identique ...
 
       - name: "5. Attente de la disponibilité de l'application (via le proxy)"
         run: |
