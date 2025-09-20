@@ -18,7 +18,7 @@ jobs:
       - name: 2. Construire et lancer les services avec Docker Compose
         run: |
           echo "Construction des images et démarrage des conteneurs en arrière-plan..."
-          docker-compose -f app/docker-compose.yml up --build -d
+          docker compose -f app/docker-compose.yml up --build -d
 
       - name: 3. Attendre que l'application soit prête
         run: |
@@ -63,4 +63,4 @@ jobs:
         if: always( )
         run: |
           echo "Arrêt des conteneurs..."
-          docker-compose -f app/docker-compose.yml down
+          docker compose -f app/docker-compose.yml down
