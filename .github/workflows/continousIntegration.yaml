@@ -417,16 +417,18 @@ jobs:
           echo "Application is live for inspection at: $NGROK_URL"
           echo "NGROK_PUBLIC_URL=$NGROK_URL" >> $GITHUB_ENV
 
-      - name: Run ZAP Baseline Scan (Manual Docker Install)
-        run: |
-          echo "Starting ZAP scan on ${{ env.NGROK_PUBLIC_URL }}"
-          docker run --network="host" -v $(pwd):/zap/wrk/:rw owasp/zap2docker-stable zap-baseline.py \
-            -t ${{ env.NGROK_PUBLIC_URL }} -g gen.conf -r report.html
-        continue-on-error: true
+      # ===================================================================
+      - name: Run ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          # URL de votre application exposée par Ngrok
+          target: ${{ env.NGROK_PUBLIC_URL }}
+          # Vous pouvez laisser les autres options par défaut pour un premier test
+          # fail_action: true # Mettez ceci à 'true' plus tard pour faire échouer le pipeline si des vulnérabilités sont trouvées
 
       - name: Stop Application Stack
         if: always()
-        run: docker compose -f docker-compose.dast.yml down
+        run: docker-compose -f docker-compose.dast.yml down
 
   # ===================================================================
   # JOB 3: UPDATE MANIFESTS (MODIFIÉ)
