@@ -28,7 +28,7 @@ jobs:
 
       # --- NOUVELLES ÉTAPES POUR NGROK ---
       - name: 4. Exposer l'application avec ngrok
-        uses: ngrok/ngrok-github-action@v1
+        uses: ngrok/ngrok-action@v1
         with:
           # Utilise le secret que vous venez de configurer dans GitHub
           authtoken: ${{ secrets.NGROK_AUTHTOKEN }}
