@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/iovision-repo:backend-5bc9aec9
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/iovision-repo:backend-4ab44dfe
         ports:
         - containerPort: 3000
         env:

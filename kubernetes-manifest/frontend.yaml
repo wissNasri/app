@@ -25,7 +25,7 @@ spec:
       containers:
       - name: frontend
         # L'image sera mise à jour par le pipeline
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/quiz-app-repo:frontend-5bc9aec9
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/quiz-app-repo:frontend-4ab44dfe
         envFrom:
         - configMapRef:
             name: quiz-app-config
