@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongo-pvc-quiz-staging
+  namespace: quiz-staging
+spec: 
+  accessModes:  
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  # Note: Si vous utilisez un PV statique, vous devrez aussi le dupliquer.
+  # Sinon, laissez le provisionneur dynamique de votre cluster en créer un.
+  storageClassName: "gp2" # ou le nom de votre StorageClass par défaut
