@@ -14,29 +14,38 @@ jobs:
     steps:
       - name: 1. Cloner le code du projet
         uses: actions/checkout@v4
+        # Le projet est cloné dans /home/runner/work/app/app
 
       - name: 2. Construire et lancer les services avec Docker Compose
+        # AJOUT : Spécifie le bon répertoire de travail
+        working-directory: ./app
         run: |
           echo "Construction des images et démarrage de la pile applicative (avec Nginx)..."
-          docker compose -f docker-compose.yml up --build -d
+          # La commande trouvera maintenant ./nginx/nginx.conf correctement
+          docker compose up --build -d
 
       - name: 3. Attendre que Nginx soit prêt
+        # AJOUT : Spécifie le bon répertoire de travail
+        working-directory: ./app
         run: |
           echo "Attente du démarrage du reverse proxy Nginx sur le port 80..."
           timeout 120s bash -c 'until curl -s http://localhost:80 > /dev/null; do echo "En attente de Nginx..."; sleep 5; done'
           echo "Nginx est prêt !"
 
       - name: 4. Installer et lancer ngrok
+        # AJOUT : Spécifie le bon répertoire de travail
+        working-directory: ./app
         env:
           NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
         run: |
           curl -s https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz | sudo tar xvz -C /usr/local/bin
           ngrok config add-authtoken $NGROK_AUTHTOKEN
-          # On expose le port 80 (Nginx ) et on logue l'URL
           ngrok http 80 --log=stdout > ngrok.log &
           sleep 5
 
       - name: 5. Afficher l'URL publique et scanner
+        # AJOUT : Spécifie le bon répertoire de travail
+        working-directory: ./app
         id: scan
         run: |
           PUBLIC_URL=$(grep -o 'url=https://[0-9a-zA-Z.-]*\.ngrok-free\.app' ngrok.log | cut -d'=' -f2 )
@@ -47,15 +56,17 @@ jobs:
           echo "public_url=$PUBLIC_URL" >> $GITHUB_OUTPUT
 
       - name: 6. Lancer le scan de sécurité DAST (OWASP ZAP)
+        # Cette action n'a pas besoin du working-directory car elle prend une URL en paramètre
         uses: zaproxy/action-baseline@v0.11.0
         with:
           target: ${{ steps.scan.outputs.public_url }}
           
       - name: 7. Arrêter tous les services
         if: always()
+        # AJOUT : Spécifie le bon répertoire de travail
+        working-directory: ./app
         run: |
           echo "Arrêt des conteneurs Docker..."
-          docker compose -f docker-compose.yml down
+          docker compose down
           echo "Arrêt de l'agent ngrok..."
-          # On s'assure que le processus ngrok est bien terminé
           pkill ngrok || true
