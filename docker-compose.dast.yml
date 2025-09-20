@@ -1,30 +1,26 @@
 version: '3.8'
 
-# Ce fichier est spécifiquement pour lancer un environnement de test DAST
-# en utilisant des images Docker existantes.
 services:
   # 1. Le service Backend
   backend:
-    # La variable ${BACKEND_IMAGE_URI} sera fournie par le pipeline.
     image: ${BACKEND_IMAGE_URI}
     container_name: dast-backend
     environment:
       - MONGO_URI=mongodb://mongo:27017/quizdb
+    # MODIFIÉ : Le backend attend maintenant que la DB soit peuplée
     depends_on:
-      - mongo
+      populate:
+        condition: service_completed_successfully
     networks:
       - dast-network
 
   # 2. Le service Frontend
   frontend:
-    # La variable ${FRONTEND_IMAGE_URI} sera fournie par le pipeline.
     image: ${FRONTEND_IMAGE_URI}
     container_name: dast-frontend
     ports:
-      # On expose le port 8080 pour que ZAP puisse scanner l'application.
       - "8080:8080"
     environment:
-      # Le frontend contacte le backend via son nom de service.
       - VITE_REACT_APP_API_URL=http://backend:3000
     depends_on:
       - backend
@@ -38,6 +34,19 @@ services:
     networks:
       - dast-network
 
-# Le réseau isolé pour cet environnement de test.
+  # --- 4. NOUVEAU SERVICE : Le peuplement de la base de données ---
+  populate:
+    # La variable ${POPULATE_IMAGE_URI} sera fournie par le pipeline
+    image: ${POPULATE_IMAGE_URI}
+    container_name: dast-populate
+    # Ce service doit attendre que la base de données soit prête
+    depends_on:
+      - mongo
+    # Il doit se connecter à la même base de données que le backend
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/quizdb
+    networks:
+      - dast-network
+
 networks:
   dast-network:
