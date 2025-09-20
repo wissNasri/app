@@ -397,13 +397,13 @@ jobs:
           sed -i 's|POPULATE_IMAGE_TAG|${{ needs.build-populate.outputs.image_tag_populate }}|' docker-compose.dast.yml
 
       - name: Start Services
-        run: docker-compose -f docker-compose.dast.yml up -d mongo backend frontend
+        run: docker compose -f docker-compose.dast.yml up -d mongo backend frontend
 
       - name: Wait for services
         run: echo "Waiting for services..." && sleep 45
 
       - name: Populate Database
-        run: docker-compose -f docker-compose.dast.yml run --rm populate
+        run: docker compose -f docker-compose.dast.yml run --rm populate
 
       - name: Setup and Expose with Ngrok
         run: |
@@ -426,7 +426,7 @@ jobs:
 
       - name: Stop Application Stack
         if: always()
-        run: docker-compose -f docker-compose.dast.yml down
+        run: docker compose -f docker-compose.dast.yml down
 
   # ===================================================================
   # JOB 3: UPDATE MANIFESTS (MODIFIÉ)
