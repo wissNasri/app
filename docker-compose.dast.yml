@@ -1,14 +1,13 @@
 # Fichier: docker-compose.dast.yml
 
 services:
-  # --- SERVICE REVERSE PROXY NGINX ---
   proxy:
     image: nginx:1.25-alpine
     container_name: dast-proxy
     ports:
-      - "8080:80" # Expose le port 80 du proxy sur le port 8080 de l'hôte
+      - "8080:80"
     volumes:
-      # CORRECTION: Monte le fichier de conf local DANS le répertoire de conf du conteneur
+      # Ce chemin est maintenant valide car l'étape 4 du workflow crée ce fichier
       - ./dast-proxy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - frontend
@@ -16,7 +15,6 @@ services:
     networks:
       - dast-network
 
-  # 1. Le service Backend (n'expose plus de port directement)
   backend:
     image: ${BACKEND_IMAGE_URI}
     container_name: dast-backend
@@ -28,26 +26,22 @@ services:
     networks:
       - dast-network
 
-  # 2. Le service Frontend (n'expose plus de port directement)
   frontend:
     image: ${FRONTEND_IMAGE_URI}
     container_name: dast-frontend
     environment:
-      # Le frontend appelle une URL relative, Nginx s'occupe du reste.
       - VITE_REACT_APP_API_URL=/api
     depends_on:
       - backend
     networks:
       - dast-network
 
-  # 3. Le service Base de Données MongoDB
   mongo:
     image: mongo:4.4.6
     container_name: dast-mongo
     networks:
       - dast-network
 
-  # 4. Le service de peuplement de la base de données
   populate:
     image: ${POPULATE_IMAGE_URI}
     container_name: dast-populate
