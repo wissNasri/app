@@ -33,7 +33,7 @@ const Quiz = () => {
         // ==================================================================
         // ## RECTIFICATION DEMANDÉE ##
         // L'URL de votre API est maintenant écrite directement ici.
-        const apiUrl = "/api/questions"; 
+        const apiUrl = "https://quiz.iovision.site/api/questions";
         // ==================================================================
         
         const response = await fetch(apiUrl );
