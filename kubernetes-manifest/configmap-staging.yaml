@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quiz-app-config-staging
+  namespace: quiz-staging
+data:
+  # URL de base de l'API que le frontend de STAGING utilisera.
+  VITE_REACT_APP_API_URL: "https://staging-quiz.iovision.site/api"
