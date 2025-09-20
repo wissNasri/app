@@ -1,25 +1,29 @@
 name: "Analyse DAST Complète avec Prévisualisation"
 
 on:
-  # Permet de lancer ce pipeline manuellement
   workflow_dispatch:
     inputs:
       backend_image_tag:
-        description: 'Tag de l''image backend (ex: backend-de6efe22)'
+        description: 'Tag de l''image backend (ex: backend-de6efe22 )'
         required: true
         default: 'backend-de6efe22'
       frontend_image_tag:
         description: 'Tag de l''image frontend (ex: frontend-de6efe22)'
         required: true
         default: 'frontend-de6efe22'
+      # --- NOUVEAU ---
+      populate_image_tag:
+        description: 'Tag de l''image populate (ex: populate-de6efe22)'
+        required: true
+        default: 'populate-de6efe22'
 
 env:
   AWS_REGION: "us-east-1"
   ECR_REPOSITORY_BACKEND: "iovision-repo"
   ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
-  # On utilise l'image ZAP complète qui contient tous les scripts et navigateurs
+  # --- NOUVEAU ---
+  ECR_REPOSITORY_POPULATE: "populate-repo"
   ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:stable"
-  # Le secret ngrok est passé en variable d'environnement
   NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
 
 jobs:
@@ -44,13 +48,16 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: "4. Démarrage de l'environnement de test"
+      # --- MODIFIÉ ---
+      - name: "4. Démarrage de l'environnement de test (avec données)"
         env:
           BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
           FRONTEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}
+          POPULATE_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_POPULATE }}:${{ github.event.inputs.populate_image_tag }}
         run: |
           docker compose -f docker-compose.dast.yml up -d
 
+      # Le reste du pipeline est identique
       - name: "5. Attente de la disponibilité de l'application"
         run: |
           echo "Attente du frontend sur http://localhost:8080..."
@@ -91,6 +98,7 @@ jobs:
         env:
           BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
           FRONTEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}
+          POPULATE_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_POPULATE }}:${{ github.event.inputs.populate_image_tag }}
         run: |
           echo "Arrêt de l'environnement Docker Compose..."
           docker compose -f docker-compose.dast.yml down
