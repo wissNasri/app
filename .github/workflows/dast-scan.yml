@@ -1,34 +1,96 @@
-# Fichier pour lancer l'environnement de test DAST
-version: '3.8'
+name: "Analyse DAST Complète avec Prévisualisation"
 
-services:
-  backend:
-    image: ${BACKEND_IMAGE_URI}
-    container_name: dast-backend
-    environment:
-      - MONGO_URI=mongodb://mongo:27017/quizdb
-    depends_on:
-      - mongo
-    networks:
-      - dast-network
+on:
+  # Permet de lancer ce pipeline manuellement
+  workflow_dispatch:
+    inputs:
+      backend_image_tag:
+        description: 'Tag de l''image backend (ex: backend-de6efe22)'
+        required: true
+        default: 'backend-de6efe22'
+      frontend_image_tag:
+        description: 'Tag de l''image frontend (ex: frontend-de6efe22)'
+        required: true
+        default: 'frontend-de6efe22'
 
-  frontend:
-    image: ${FRONTEND_IMAGE_URI}
-    container_name: dast-frontend
-    ports:
-      - "8080:8080"
-    environment:
-      - VITE_REACT_APP_API_URL=http://backend:3000
-    depends_on:
-      - backend
-    networks:
-      - dast-network
+env:
+  AWS_REGION: "us-east-1"
+  ECR_REPOSITORY_BACKEND: "iovision-repo"
+  ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
+  # On utilise l'image ZAP complète qui contient tous les scripts et navigateurs
+  ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:stable"
+  # Le secret ngrok est passé en variable d'environnement
+  NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
 
-  mongo:
-    image: mongo:4.4.6
-    container_name: dast-mongo
-    networks:
-      - dast-network
+jobs:
+  run-full-dast-analysis:
+    name: "Lancer le Scan DAST Complet (avec Spider AJAX)"
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
 
-networks:
-  dast-network:
+    steps:
+      - name: "1. Checkout du code"
+        uses: actions/checkout@v4
+
+      - name: "2. Configuration des accès AWS"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::228578233417:role/oicd
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: "3. Connexion au registre d'images (ECR)"
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: "4. Démarrage de l'environnement de test"
+        env:
+          BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
+          FRONTEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}
+        run: |
+          docker compose -f docker-compose.dast.yml up -d
+
+      - name: "5. Attente de la disponibilité de l'application"
+        run: |
+          echo "Attente du frontend sur http://localhost:8080..."
+          timeout 120s bash -c 'until curl -s --head --fail http://localhost:8080 > /dev/null; do echo "En attente..."; sleep 5; done'
+          echo "Application prête !"
+
+      - name: "6. Création du tunnel de prévisualisation (ngrok )"
+        run: |
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update && sudo apt install ngrok
+          ngrok config add-authtoken $NGROK_AUTHTOKEN
+          
+          echo "Lancement du tunnel ngrok..."
+          ngrok http 8080 --log=stdout > ngrok.log &
+          sleep 10
+          
+          PUBLIC_URL=$(grep -o 'url=https://[a-zA-Z0-9.-]*\.ngrok-free\.app' ngrok.log | cut -d'=' -f2 )
+          echo "===================================================================="
+          echo "URL DE PRÉVISUALISATION (à copier dans votre navigateur) :"
+          echo $PUBLIC_URL
+          echo "===================================================================="
+          echo "NGROK_URL=$PUBLIC_URL" >> $GITHUB_ENV
+
+      - name: "7. Lancement du Scan DAST Complet"
+        run: |
+          docker run \
+            --network=host \
+            ${{ env.ZAP_IMAGE }} \
+            zap-full-scan.py \
+              -t ${{ env.NGROK_URL }} \
+              -j \
+              -m 5 \
+              -l WARN
+
+      - name: "8. Arrêt de l'environnement de test"
+        if: always()
+        env:
+          BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
+          FRONTEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}
+        run: |
+          echo "Arrêt de l'environnement Docker Compose..."
+          docker compose -f docker-compose.dast.yml down
