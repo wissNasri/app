@@ -20,29 +20,17 @@ jobs:
           echo "Construction des images et démarrage de la pile applicative..."
           docker compose up --build -d
 
-      # --- NOUVELLE ÉTAPE DE DÉBOGAGE ---
-      - name: 2.5. Attendre un peu et afficher les logs des services
-        run: |
-          echo "Attente de 15 secondes pour laisser les services se stabiliser ou planter..."
-          sleep 15
-          echo "--- État actuel des conteneurs ---"
-          docker compose ps
-          echo "--- LOGS DU SERVICE BACKEND ---"
-          # Cette commande est la plus importante. Elle nous montrera l'erreur.
-          docker compose logs backend
-          echo "--- LOGS DU SERVICE FRONTEND ---"
-          docker compose logs frontend
-          
       - name: 3. Attendre que Nginx soit prêt
         run: |
           echo "Attente du démarrage du reverse proxy Nginx sur le port 80..."
+          # Boucle de vérification robuste.
           if ! timeout 120s bash -c 'until curl -sf http://localhost:80 > /dev/null; do echo "En attente de Nginx..."; sleep 5; done'; then
-            echo "ERREUR: Nginx n'a pas démarré à temps. Vérifiez les logs des autres services."
+            echo "ERREUR: Nginx n'a pas démarré à temps. Affichage des logs de tous les services..."
+            docker compose logs
             exit 1
           fi
           echo "Nginx est prêt !"
 
-      # ... reste du pipeline inchangé ...
       - name: 4. Installer et lancer ngrok
         env:
           NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
