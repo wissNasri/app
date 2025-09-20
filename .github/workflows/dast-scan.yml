@@ -45,18 +45,26 @@ jobs:
 
       - name: "4. Démarrage de l'environnement de test complet"
         run: |
-          # Exporter les variables pour le shell de cette étape (pour docker-compose up)
+          # Exporter les variables pour le shell de cette étape
           export BACKEND_IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}"
           export FRONTEND_IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}"
           export POPULATE_IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_POPULATE }}:${{ github.event.inputs.populate_image_tag }}"
 
-          # Sauvegarder les variables pour les étapes suivantes (pour docker-compose down)
+          # Sauvegarder les variables pour les étapes suivantes
           echo "BACKEND_IMAGE_URI=$BACKEND_IMAGE_URI" >> $GITHUB_ENV
           echo "FRONTEND_IMAGE_URI=$FRONTEND_IMAGE_URI" >> $GITHUB_ENV
           echo "POPULATE_IMAGE_URI=$POPULATE_IMAGE_URI" >> $GITHUB_ENV
           
-          echo "Variables d'images configurées. Démarrage des conteneurs Docker..."
+          # --- ÉTAPE DE DÉBOGAGE CRUCIALE ---
+          echo "Vérification de la structure des fichiers avant de lancer Docker..."
+          ls -lR
+          # Cette commande va lister tous les fichiers et dossiers, montrant si
+          # le chemin 'dast-proxy/nginx.conf' est correct.
+          
+          echo "Démarrage des conteneurs Docker..."
           docker compose -f docker-compose.dast.yml up -d
+
+      # ... Le reste du fichier reste identique ...
 
       - name: "5. Attente de la disponibilité de l'application (via le proxy)"
         run: |
