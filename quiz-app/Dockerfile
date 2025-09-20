@@ -1,3 +1,4 @@
+
 # Contenu final pour : quiz-app/Dockerfile
 
 # ÉTAPE 1: Build de l'application React
