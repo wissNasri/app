@@ -1,0 +1,63 @@
+# 05-database.yaml (Version SANS securityContext)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo
+  namespace: quiz-staging
+  labels:
+  
+    app: mongo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      # Le bloc securityContext a été supprimé ici.
+      containers:
+      - name: mongo
+        image: mongo:4.4.6
+        ports:
+        - containerPort: 27017
+        volumeMounts:
+        - name: mongo-storage
+          mountPath: /data/db
+        readinessProbe:
+          tcpSocket:
+            port: 27017
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 27017
+          initialDelaySeconds: 10
+          periodSeconds: 15
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+      volumes:
+      - name: mongo-storage
+        persistentVolumeClaim:
+          claimName: mongo-pvc-quiz
+---    
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-service
+  namespace: quiz-staging
+spec:
+  selector:
+    app: mongo
+  ports:
+  - protocol: TCP
+    port: 27017
+    targetPort: 27017
+  type: ClusterIP
