@@ -3,7 +3,8 @@ name: React.js CI + Semgrep
 on:
   push:
     branches:
-      - master
+      - main
+      
     paths:
       - 'backend/**'
       - 'quiz-app/**'
