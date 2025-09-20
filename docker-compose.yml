@@ -1,69 +1,74 @@
 version: '3.8'
 
-# Fichier docker-compose pour l'environnement de test DAST local.
-# Il construit les images à la volée et lie les services.
-
 services:
-  # --- Service Backend (API Node.js) ---
+  # --- NOUVEAU : Service Nginx Reverse Proxy ---
+  nginx:
+    image: nginx:latest
+    container_name: quiz-nginx-proxy
+    ports:
+      - "80:80" # On expose le port 80 de Nginx sur la machine hôte. C'est ce port que ngrok va utiliser.
+    volumes:
+      # On monte notre fichier de configuration dans le conteneur Nginx.
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - quiz-net
+
+  # --- Service Backend (inchangé) ---
   backend:
     build:
-      context: ./backend      # Chemin vers le dossier du backend
-      dockerfile: Dockerfile  # Utilise le Dockerfile standard du backend
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: quiz-backend
-    ports:
-      - "3000:3000"           # Expose le port pour un débogage éventuel
     environment:
-      # L'URI pointe vers le nom du service 'mongo' dans ce fichier
       - MONGO_URI=mongodb://mongo:27017/quizdb
     depends_on:
-      - mongo                 # Attend que la base de données soit prête
+      - mongo
     networks:
       - quiz-net
+    # Pas besoin d'exposer de port ici, Nginx s'en charge.
 
-  # --- Service Frontend (React) ---
+  # --- Service Frontend (modifié) ---
   frontend:
     build:
-      context: ./quiz-app     # Chemin vers le dossier du frontend
+      context: ./quiz-app
       dockerfile: Dockerfile
     container_name: quiz-frontend
-    ports:
-      - "8080:8080"           # Expose le port pour le scan DAST
     environment:
-      # Crucial : Le frontend appelle le backend via son nom de service
-      - VITE_REACT_APP_API_URL=http://backend:3000
+      # IMPORTANT : L'URL de l'API est maintenant relative, car Nginx gère la redirection.
+      - VITE_REACT_APP_API_URL=/api
     depends_on:
-      - backend               # Attend que l'API soit prête
+      - backend
     networks:
       - quiz-net
+    # Pas besoin d'exposer de port ici, Nginx s'en charge.
 
-  # --- Service Base de données (MongoDB ) ---
+  # --- Services mongo et populate-db (inchangés) ---
   mongo:
-    image: mongo:4.4.6        # Utilise une image officielle pour la simplicité
+    image: mongo:4.4.6
     container_name: quiz-mongo
     volumes:
-      - mongo-data:/data/db   # Persiste les données entre les lancements
+      - mongo-data:/data/db
     networks:
       - quiz-net
 
-  # --- Tâche d'initialisation de la base de données ---
   populate-db:
     build:
       context: ./backend
-      dockerfile: Dockerfile.populate # Utilise le Dockerfile dédié à cette tâche
+      dockerfile: Dockerfile.populate
     container_name: quiz-populate
     environment:
       - MONGO_URI=mongodb://mongo:27017/quizdb
     depends_on:
-      - mongo                 # S'exécute uniquement après le démarrage de mongo
+      - mongo
     networks:
       - quiz-net
-    # Ce conteneur s'arrêtera de lui-même une fois le script terminé.
 
-# Réseau partagé pour la communication entre les conteneurs
 networks:
   quiz-net:
     driver: bridge
 
-# Volume pour stocker les données de MongoDB
 volumes:
   mongo-data:
