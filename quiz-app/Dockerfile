@@ -9,6 +9,7 @@ ARG VITE_REACT_APP_API_URL=/api
 ENV VITE_REACT_APP_API_URL=$VITE_REACT_APP_API_URL
 RUN npm run build
 
+
 # ÉTAPE 2: Service avec Nginx
 FROM nginx:1.25-alpine
 # Copie des fichiers buildés
