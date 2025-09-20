@@ -1,150 +1,60 @@
-name: "Analyse DAST Complète avec Prévisualisation"
+name: DAST Scan avec Docker Compose et ngrok
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
-    inputs:
-      backend_image_tag:
-        description: 'Tag de l''image backend (ex: backend-xxxx)'
-        required: true
-      frontend_image_tag:
-        description: 'Tag de l''image frontend (ex: frontend-xxxx)'
-        required: true
-      populate_image_tag:
-        description: 'Tag de l''image populate (ex: populate-xxxx)'
-        required: true
-
-env:
-  AWS_REGION: "us-east-1"
-  ECR_REPOSITORY_BACKEND: "iovision-repo"
-  ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
-  ECR_REPOSITORY_POPULATE: "populate-repo"
-  ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:stable"
-  NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
 
 jobs:
-  run-full-dast-analysis:
-    name: "Lancer le Scan DAST Complet (avec Spider AJAX)"
+  dast-scan:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
+    name: Lancer, Exposer avec ngrok et Scanner l'application
 
     steps:
-      - name: "1. Checkout du code"
+      - name: 1. Cloner le code du projet
         uses: actions/checkout@v4
 
-      - name: "2. Configuration des accès AWS"
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: 2. Construire et lancer les services avec Docker Compose
+        run: |
+          echo "Construction des images et démarrage des conteneurs en arrière-plan..."
+          docker-compose -f app/docker-compose.yml up --build -d
+
+      - name: 3. Attendre que l'application soit prête
+        run: |
+          echo "Attente du démarrage du service frontend sur le port 8080..."
+          timeout 120s bash -c 'until curl -s http://localhost:8080 > /dev/null; do echo "En attente du frontend..."; sleep 5; done'
+          echo "Le frontend est prêt !"
+
+      # --- NOUVELLES ÉTAPES POUR NGROK ---
+      - name: 4. Exposer l'application avec ngrok
+        uses: ngrok/ngrok-github-action@v1
         with:
-          role-to-assume: arn:aws:iam::228578233417:role/oicd
-          aws-region: ${{ env.AWS_REGION }}
+          # Utilise le secret que vous venez de configurer dans GitHub
+          authtoken: ${{ secrets.NGROK_AUTHTOKEN }}
+          # Expose le port 8080 (celui du frontend )
+          port: 8080
+          # Stocke l'URL générée dans un fichier pour l'afficher plus tard
+          log: "ngrok.log"
 
-      - name: "3. Connexion au registre d'images (ECR)"
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: "4. Création de la config Nginx et démarrage de l'environnement"
+      - name: 5. Afficher l'URL publique ngrok
         run: |
-          # Création de la configuration Nginx à la volée pour garantir sa présence
-          echo "Création de la configuration Nginx..."
-          mkdir -p dast-proxy
-          cat <<'EOF' > dast-proxy/nginx.conf
-          server {
-              listen 80;
-              server_name localhost;
-
-              location / {
-                  proxy_pass http://frontend:8080;
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto $scheme;
-              }
-
-              location /api/ {
-                  proxy_pass http://backend:3000;
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto $scheme;
-              }
-          }
-          EOF
-          echo "Configuration Nginx créée avec succès."
-
-          # Exporter et sauvegarder les URIs des images
-          export BACKEND_IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}"
-          export FRONTEND_IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}"
-          export POPULATE_IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_POPULATE }}:${{ github.event.inputs.populate_image_tag }}"
-          echo "BACKEND_IMAGE_URI=$BACKEND_IMAGE_URI" >> $GITHUB_ENV
-          echo "FRONTEND_IMAGE_URI=$FRONTEND_IMAGE_URI" >> $GITHUB_ENV
-          echo "POPULATE_IMAGE_URI=$POPULATE_IMAGE_URI" >> $GITHUB_ENV
+          echo "################################################"
+          echo "## L'application est accessible publiquement à l'adresse suivante :"
+          cat ngrok.log
+          echo "################################################"
           
-          echo "Démarrage des conteneurs Docker..."
-          docker compose -f docker-compose.dast.yml up -d
+      # --- FIN DES NOUVELLES ÉTAPES ---
 
-      - name: "5. Attente de la disponibilité de l'application (via le proxy )"
-        run: |
-          echo "Attente du proxy sur http://localhost:8080..."
-          timeout 120s bash -c 'until curl -s --head --fail http://localhost:8080 > /dev/null; do echo "En attente..."; sleep 5; done'
-          echo "Application prête !"
-
-      - name: "6. Création du tunnel de prévisualisation (ngrok )"
-        run: |
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-          sudo apt update && sudo apt install ngrok
-          ngrok config add-authtoken $NGROK_AUTHTOKEN
-          
-          echo "Lancement du tunnel ngrok..."
-          ngrok http 8080 --log=stdout > ngrok.log &
-          sleep 10
-          
-          PUBLIC_URL=$(grep -o 'url=https://[a-zA-Z0-9.-]*\.ngrok-free\.app' ngrok.log | cut -d'=' -f2 )
-          echo "===================================================================="
-          echo "URL DE PRÉVISUALISATION (à copier dans votre navigateur) :"
-          echo $PUBLIC_URL
-          echo "===================================================================="
-          echo "NGROK_URL=$PUBLIC_URL" >> $GITHUB_ENV
-
-      - name: "7. Lancement du Scan DAST Complet"
-        run: |
-          docker run \
-            --network=host \
-            -v $(pwd):/zap/wrk:rw \
-            ${{ env.ZAP_IMAGE }} \
-            zap-full-scan.py \
-              -t ${{ env.NGROK_URL }} \
-              -g gen.conf \
-              -j \
-              -r dast-report.html \
-              -w dast-report.md \
-              -l WARN
-
-      # --- NOUVELLE ÉTAPE DE DÉBOGAGE ---
-      - name: "Debug: Afficher les logs des conteneurs"
-        if: always() # S'exécute toujours pour nous donner des informations
-        run: |
-          echo "--- Logs du Proxy Nginx (dast-proxy) ---"
-          docker logs dast-proxy
-          
-          echo "--- Logs du Frontend (dast-frontend) ---"
-          docker logs dast-frontend
-          
-          echo "--- Logs du Backend (dast-backend) ---"
-          docker logs dast-backend
-          
-          echo "--- Logs de la Base de Données (dast-mongo) ---"
-          docker logs dast-mongo
-
-      - name: "8. Upload du rapport DAST"
-        uses: actions/upload-artifact@v4
+      - name: 6. Lancer le scan de sécurité DAST (OWASP ZAP)
+        uses: zaproxy/action-baseline@v0.11.0
         with:
-          name: dast-scan-report
-          path: dast-report.html
-
-      - name: "9. Arrêt de l'environnement de test"
-        if: always()
+          # ZAP peut maintenant utiliser soit localhost, soit l'URL ngrok.
+          # Utilisons localhost car c'est plus direct et rapide pour le scan.
+          target: 'http://localhost:8080'
+          
+      - name: 7. Arrêter les services Docker Compose
+        if: always( )
         run: |
-          echo "Arrêt de l'environnement Docker Compose..."
-          docker compose -f docker-compose.dast.yml down
+          echo "Arrêt des conteneurs..."
+          docker-compose -f app/docker-compose.yml down
