@@ -9,6 +9,7 @@ COPY . .
 RUN npm run build
 
 
+
 # ÉTAPE 2: Service avec Nginx
 FROM nginx:1.25-alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
