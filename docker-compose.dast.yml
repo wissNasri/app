@@ -1,48 +1,45 @@
 version: '3.8'
 
 services:
-  # 1. Le service Backend
   backend:
     image: ${BACKEND_IMAGE_URI}
     container_name: dast-backend
     environment:
       - MONGO_URI=mongodb://mongo:27017/quizdb
-    # MODIFIÉ : Le backend attend maintenant que la DB soit peuplée
+    # --- CORRECTION --- : On expose le port du backend
+    ports:
+      - "3000:3000"
     depends_on:
       populate:
         condition: service_completed_successfully
     networks:
       - dast-network
 
-  # 2. Le service Frontend
   frontend:
     image: ${FRONTEND_IMAGE_URI}
     container_name: dast-frontend
     ports:
       - "8080:8080"
     environment:
-      - VITE_REACT_APP_API_URL=http://backend:3000
+      # --- CORRECTION --- : L'URL du backend pointe maintenant vers localhost
+      # Le frontend (dans le navigateur) appellera le backend via le port exposé sur la machine hôte.
+      - VITE_REACT_APP_API_URL=http://localhost:3000/api
     depends_on:
       - backend
     networks:
       - dast-network
 
-  # 3. Le service Base de Données MongoDB
   mongo:
     image: mongo:4.4.6
     container_name: dast-mongo
     networks:
       - dast-network
 
-  # --- 4. NOUVEAU SERVICE : Le peuplement de la base de données ---
   populate:
-    # La variable ${POPULATE_IMAGE_URI} sera fournie par le pipeline
     image: ${POPULATE_IMAGE_URI}
     container_name: dast-populate
-    # Ce service doit attendre que la base de données soit prête
     depends_on:
       - mongo
-    # Il doit se connecter à la même base de données que le backend
     environment:
       - MONGO_URI=mongodb://mongo:27017/quizdb
     networks:
