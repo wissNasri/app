@@ -1,23 +1,21 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: mongo-pv-quiz
+  name: mongo-pv-quiz-staging
 spec:
   capacity: 
     storage: 1Gi
   volumeMode: Filesystem
   accessModes:
     - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Delete 
-
   hostPath:
-    # Chemin de stockage unique sur le disque du nœud EKS.
-    path: /data/db-quiz 
+    # Chemin unique pour les données de staging sur le nœud EKS
+    path: /data/db-quiz-staging 
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: mongo-pvc-quiz
+  name: mongo-pvc-quiz-staging
   namespace: quiz-staging
 spec: 
   accessModes:  
@@ -25,5 +23,4 @@ spec:
   resources:
     requests:
       storage: 1Gi
-  # Ligne cruciale qui force l'utilisation du PV manuel ci-dessus.
   storageClassName: "" 
