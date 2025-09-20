@@ -4,24 +4,19 @@ on:
   workflow_dispatch:
     inputs:
       backend_image_tag:
-        description: 'Tag de l''image backend (ex: backend-de6efe22 )'
+        description: 'Tag de l''image backend (ex: backend-xxxx)'
         required: true
-        default: 'backend-de6efe22'
       frontend_image_tag:
-        description: 'Tag de l''image frontend (ex: frontend-de6efe22)'
+        description: 'Tag de l''image frontend (ex: frontend-xxxx)'
         required: true
-        default: 'frontend-de6efe22'
-      # --- NOUVEAU ---
       populate_image_tag:
-        description: 'Tag de l''image populate (ex: populate-de6efe22)'
+        description: 'Tag de l''image populate (ex: populate-xxxx)'
         required: true
-        default: 'populate-de6efe22'
 
 env:
   AWS_REGION: "us-east-1"
   ECR_REPOSITORY_BACKEND: "iovision-repo"
   ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
-  # --- NOUVEAU ---
   ECR_REPOSITORY_POPULATE: "populate-repo"
   ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:stable"
   NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
@@ -35,7 +30,7 @@ jobs:
       contents: read
 
     steps:
-      - name: "1. Checkout du code"
+      - name: "1. Checkout du code (incluant la config Nginx)"
         uses: actions/checkout@v4
 
       - name: "2. Configuration des accès AWS"
@@ -48,8 +43,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # --- MODIFIÉ ---
-      - name: "4. Démarrage de l'environnement de test (avec données)"
+      - name: "4. Démarrage de l'environnement de test complet"
         env:
           BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
           FRONTEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}
@@ -57,10 +51,9 @@ jobs:
         run: |
           docker compose -f docker-compose.dast.yml up -d
 
-      # Le reste du pipeline est identique
-      - name: "5. Attente de la disponibilité de l'application"
+      - name: "5. Attente de la disponibilité de l'application (via le proxy)"
         run: |
-          echo "Attente du frontend sur http://localhost:8080..."
+          echo "Attente du proxy sur http://localhost:8080..."
           timeout 120s bash -c 'until curl -s --head --fail http://localhost:8080 > /dev/null; do echo "En attente..."; sleep 5; done'
           echo "Application prête !"
 
@@ -86,19 +79,24 @@ jobs:
         run: |
           docker run \
             --network=host \
+            -v $(pwd):/zap/wrk:rw \
             ${{ env.ZAP_IMAGE }} \
             zap-full-scan.py \
               -t ${{ env.NGROK_URL }} \
+              -g gen.conf \
               -j \
-              -m 5 \
+              -r dast-report.html \
+              -w dast-report.md \
               -l WARN
 
-      - name: "8. Arrêt de l'environnement de test"
+      - name: "8. Upload du rapport DAST"
+        uses: actions/upload-artifact@v4
+        with:
+          name: dast-scan-report
+          path: dast-report.html
+
+      - name: "9. Arrêt de l'environnement de test"
         if: always()
-        env:
-          BACKEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ github.event.inputs.backend_image_tag }}
-          FRONTEND_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ github.event.inputs.frontend_image_tag }}
-          POPULATE_IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_POPULATE }}:${{ github.event.inputs.populate_image_tag }}
         run: |
           echo "Arrêt de l'environnement Docker Compose..."
           docker compose -f docker-compose.dast.yml down
