@@ -3,7 +3,7 @@ name: React.js CI/CD - Staging to Production
 on:
   push:
     branches:
-      - main
+      - master
     paths:
       - 'backend/**'
       - 'quiz-app/**'
