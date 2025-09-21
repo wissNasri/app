@@ -25,7 +25,6 @@ const Quiz = () => {
           // const apiUrl = import.meta.env.VITE_REACT_APP_API_URL || 'http://localhost:3000/api/questions';
           const apiUrl = "https://quiz-staging.iovision.site/api/questions"
 
-          https://quiz-staging.iovision.site/
           const response = await fetch(apiUrl);
           if (!response.ok) throw new Error("Failed to fetch");
           let questions = await response.json();
