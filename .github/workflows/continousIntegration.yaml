@@ -1,6 +1,7 @@
 name: React.js CI + Semgrep
 
 on:
+  # Déclenchement automatique sur push vers la branche main
   push:
     branches:
       - main
@@ -8,6 +9,16 @@ on:
       - 'backend/**'
       - 'quiz-app/**'
       - 'kubernetes-manifest/**'
+      
+  # Déclenchement manuel avec option pour le déploiement en production
+  workflow_dispatch:
+    inputs:
+      deploy_to_production:
+        description: 'Promote to Production after all checks pass'
+        required: true
+        type: boolean
+        default: false
+
 
 env:
   AWS_REGION: "us-east-1"
