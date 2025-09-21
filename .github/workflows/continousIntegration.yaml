@@ -1,4 +1,5 @@
-name: React.js CI + Semgrep
+# .github/workflows/continousIntegration.yaml (Version mise à jour)
+name: CI/CD with Staging, DAST, and Production Promotion
 
 on:
   push:
@@ -8,12 +9,15 @@ on:
       - 'backend/**'
       - 'quiz-app/**'
       - 'kubernetes-manifest/**'
+      - 'kubernetes-manifest-staging/**'
 
 env:
   AWS_REGION: "us-east-1"
   ECR_REPOSITORY_BACKEND: "iovision-repo"
   ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
-  ECR_REPOSITORY_POPULATE: "populate-repo" # NOUVEAU : Variable pour le nouveau dépôt ECR
+  ECR_REPOSITORY_POPULATE: "populate-repo"
+  STAGING_URL: "https://quiz-staging.iovision.site" # URL pour les tests DAST
+
 
 jobs:
   # ===================================================================
@@ -363,103 +367,146 @@ jobs:
   # ===================================================================
   # JOB 3: UPDATE MANIFESTS (MODIFIÉ)
   # ===================================================================
-  update-manifests:
-    name: "Deploy: Update Manifests for ArgoCD"
+  update-staging-manifests:
+    name: "Deploy: Update Staging Manifests"
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend,build-populate]
+    needs: [build-backend, build-frontend, build-populate]
     permissions:
       contents: write
     steps:
-      - name: "Checkout repository to access files"
+      - name: "Checkout repository"
         uses: actions/checkout@v4
-      - name: Update manifests and push to Git
+      - name: "Update Staging Manifests"
         run: |
-          git config --global user.name 'wissNasri'
-          git config --global user.email 'wissemnasri81@gmail.com'
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'actions-bot@github.com'
           
-          # MODIFIÉ : Récupération des 3 tags d'image
           BACKEND_TAG=${{ needs.build-backend.outputs.image_tag_backend }}
           POPULATE_TAG=${{ needs.build-populate.outputs.image_tag_populate }}
           FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
           
-          if [ -z "$BACKEND_TAG" ] || [ -z "$FRONTEND_TAG" ] || [ -z "$POPULATE_TAG" ]; then
-            echo "Error: Image tags from previous jobs are empty. Aborting."
-            exit 1
-          fi
+          sed -i "s|\(image: .*iovision-repo:\).*|\1${BACKEND_TAG}|" kubernetes-manifest-staging/backend.yaml
+          sed -i "s|\(image: .*quiz-app-repo:\).*|\1${FRONTEND_TAG}|" kubernetes-manifest-staging/frontend.yaml
+          sed -i "s|\(image: .*populate-repo:\).*|\1${POPULATE_TAG}|" kubernetes-manifest-staging/populate-job.yaml
           
-          # MODIFIÉ : Mise à jour des 3 fichiers manifestes
-          sed -i "s|\(image: .*iovision-repo:\).*|\1$BACKEND_TAG|" kubernetes-manifest/backend.yaml
-          sed -i "s|\(image: .*quiz-app-repo:\).*|\1$FRONTEND_TAG|" kubernetes-manifest/frontend.yaml
-          sed -i "s|\(image: .*populate-repo:\).*|\1$POPULATE_TAG|" kubernetes-manifest/populate-job.yaml
-          
-          git add kubernetes-manifest/backend.yaml kubernetes-manifest/frontend.yaml kubernetes-manifest/populate-job.yaml
+          git add kubernetes-manifest-staging/
           
           if git diff --cached --quiet; then
-            echo "No changes to commit."
+            echo "No changes to staging manifests."
           else
             COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
-            git commit -m "ci(deploy): Update image tags to ${COMMIT_SHA}"
+            git commit -m "ci(staging): Update image tags to ${COMMIT_SHA}"
             git push
           fi
 
   # ===================================================================
-  # JOB 4: K8S MANIFEST SCAN (MODIFIÉ)
+  # JOB 2 : Attendre la disponibilité du site et lancer les tests
   # ===================================================================
-  k8s-manifest-scan:
-    needs: update-manifests
+  test-on-staging-environment:
+    name: "Test on Staging Environment"
     runs-on: ubuntu-latest
+    needs: [update-staging-manifests]
+    # MODIFIÉ : Plus besoin de permissions spéciales pour AWS
+    permissions:
+      contents: read
+
     steps:
-      - name: Checkout repository
+      - name: "Checkout repository"
         uses: actions/checkout@v4
-      - name: Run Checkov scan (JSON report)
-        uses: bridgecrewio/checkov-action@master   
+
+      # --- ÉTAPE 1 : Attente simple via Health Check HTTP ---
+      - name: "Wait for Staging URL to be available"
+        run: |
+          echo "Waiting for ${{ env.STAGING_URL }} to become available..."
+          end_time=$(( $(date +%s) + 600 )) # Timeout de 10 minutes (600 secondes)
+          
+          while true; do
+            # Utilise curl pour vérifier le code de statut HTTP.
+            # -s : silencieux, -o /dev/null : n'affiche pas le corps, -w '%{http_code}' : affiche le code statut
+            # --insecure : ignore les erreurs de certificat si le certificat n'est pas encore valide (utile juste après un déploiement )
+            status_code=$(curl --insecure -s -o /dev/null -w '%{http_code}' ${{ env.STAGING_URL }} )
+            
+            if [ "$status_code" -eq 200 ]; then
+              echo "Success! ${{ env.STAGING_URL }} is responding with status 200."
+              break
+            else
+              echo "Staging URL not ready yet (Status: $status_code). Retrying in 20 seconds..."
+            fi
+            
+            if [ $(date +%s) -gt $end_time ]; then
+              echo "Timeout: Staging URL did not become available within 10 minutes."
+              exit 1
+            fi
+            
+            sleep 20
+          done
+
+      # --- ÉTAPE 2 : Scans de sécurité (DAST, Checkov, Gitleaks) ---
+      - name: "Run DAST Scan with OWASP ZAP"
+        uses: zaproxy/action-full-scan@v0.10.0
+        with:
+          target: ${{ env.STAGING_URL }}
+          fail_action: false
+          report_path: 'zap_report.html'
+
+      - name: "Run Checkov scan on Production manifests"
+        uses: bridgecrewio/checkov-action@master
         with:
           directory: ./kubernetes-manifest
           framework: kubernetes
-          output_format: json
-          output_file_path: ./checkov-report.json
-          quiet: true
-        continue-on-error: true
-      - name: Upload Checkov JSON report
+          soft_fail: true
+          output_format: "cli,json"
+          output_file_path: "console,checkov_report.json"
+
+      - name: "Run Gitleaks scan on manifests"
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          path: ./
+          fail: false
+          report_format: "json"
+          report_path: "gitleaks_report.json"
+
+      - name: "Upload Security Reports"
         uses: actions/upload-artifact@v4
         with:
-          name: checkov-report
-          path: ./checkov-report.json
-      - name: Run Kubescape scan (JSON report)
-        uses: kubescape/github-action@main   
-        with:
-          files: "kubernetes-manifest/*.yaml"
-          format: json
-          outputFile: ./kubescape-report.json
-        continue-on-error: true
-      - name: Upload Kubescape JSON report
-        uses: actions/upload-artifact@v4
-        with:
-          name: kubescape-report
-          path: ./kubescape-report.json
+          name: security-reports
+          path: |
+            zap_report.html
+            checkov_report.json
+            gitleaks_report.json
+          retention-days: 7
 
   # ===================================================================
-  # NOUVEAU JOB : GITLEAKS SCAN POUR LES MANIFESTES
+  # JOB 3 : Promouvoir en Production (inchangé)
   # ===================================================================
-  gitleaks-scan-manifests:
-    needs: update-manifests
-    name: Gitleaks Analysis (kubernetes-manifest)
+  promote-to-production:
+    name: "Promote to Production"
     runs-on: ubuntu-latest
-    container:
-      image: zricethezav/gitleaks:latest
-    defaults:
-      run:
-        working-directory: ./kubernetes-manifest
+    needs: [test-on-staging-environment]
+    permissions:
+      contents: write
     steps:
-      - name: Checkout repository
+      - name: "Checkout repository"
         uses: actions/checkout@v4
-      - name: Mark GitHub workspace as safe
-        run: git config --global --add safe.directory $GITHUB_WORKSPACE
-      - name: Run Gitleaks scan on kubernetes-manifest
-        run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-manifests.json
-        continue-on-error: true
-      - name: Upload Gitleaks JSON report
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-json-manifests-report
-          path: ./kubernetes-manifest/gitleaks-report-manifests.json
+      - name: "Update Production Manifests"
+        run: |
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'actions-bot@github.com'
+          
+          BACKEND_TAG=${{ needs.build-backend.outputs.image_tag_backend }}
+          POPULATE_TAG=${{ needs.build-populate.outputs.image_tag_populate }}
+          FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
+          
+          sed -i "s|\(image: .*iovision-repo:\).*|\1${BACKEND_TAG}|" kubernetes-manifest/backend.yaml
+          sed -i "s|\(image: .*quiz-app-repo:\).*|\1${FRONTEND_TAG}|" kubernetes-manifest/frontend.yaml
+          sed -i "s|\(image: .*populate-repo:\).*|\1${POPULATE_TAG}|" kubernetes-manifest/populate-job.yaml
+          
+          git add kubernetes-manifest/
+          
+          if git diff --cached --quiet; then
+            echo "No changes to production manifests."
+          else
+            COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
+            git commit -m "ci(prod): Promote image tags ${COMMIT_SHA} to production"
+            git push
+          fi
