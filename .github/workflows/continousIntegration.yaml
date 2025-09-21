@@ -1,7 +1,6 @@
 name: React.js CI + Semgrep
 
 on:
-  # Déclenchement automatique sur push vers la branche main
   push:
     branches:
       - main
@@ -9,10 +8,6 @@ on:
       - 'backend/**'
       - 'quiz-app/**'
       - 'kubernetes-manifest/**'
-      - 'app/.github/workflows/**'
-      
-
-
 
 env:
   AWS_REGION: "us-east-1"
@@ -322,14 +317,14 @@ jobs:
   # ===================================================================
   # JOB 2: BUILD & PUSH FRONTEND (INCHANGÉ)
   # ===================================================================
-  build-frontend:
-    name: "Build & Push: Frontend"
+  build-frontend: 
     needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
-  
+    name: "Build & Push: Frontend"
     runs-on: ubuntu-latest
-    permissions: { id-token: write }
+    permissions:
+      id-token: write
     outputs:
-      image_tag: ${{ steps.vars-frontend.outputs.image_tag }}
+      image_tag: ${{ steps.vars.outputs.image_tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -338,195 +333,129 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
-      - name: "Define Frontend Image Tag"
-        id: vars-frontend
+      - name: Define Frontend Image Tag
+        id: vars
         run: |
           SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
-          echo "image_tag=frontend-${SHA_SHORT}" >> $GITHUB_OUTPUT
-      - name: "Build, Push & Scan Frontend for Staging"
+          IMAGE_TAG="frontend-${SHA_SHORT}"
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+      - name: Build and Push Frontend Image
+        id: build-image
         run: |
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ steps.vars-frontend.outputs.image_tag }}"
-          
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:${{ steps.vars.outputs.image_tag }}"
           docker build -t $IMAGE_URI ./quiz-app
           docker push $IMAGE_URI
-          echo "IMAGE_URI_FOR_SCAN=$IMAGE_URI" >> $GITHUB_ENV
-      - name: "Scan Image with Trivy"
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+      - name: Scan FRONTEND image with Trivy
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: ${{ env.IMAGE_URI_FOR_SCAN }}
+          image-ref: ${{ steps.build-image.outputs.image_uri }}
           format: 'table'
           exit-code: '0'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
-  
-
-
 
   # ===================================================================
   # JOB 3: UPDATE MANIFESTS (MODIFIÉ)
   # ===================================================================
-  # ===================================================================
-  # DÉPLOIEMENT EN STAGING ET SCAN DAST
-  # ===================================================================
-  update-manifests-staging:
-    name: "Deploy to Staging: Update Manifests"
+  update-manifests:
+    name: "Deploy: Update Manifests for ArgoCD"
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend, build-populate] # Dépend toujours des builds
+    needs: [build-backend, build-frontend,build-populate]
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - name: Update staging manifests and push to Git
+      - name: "Checkout repository to access files"
+        uses: actions/checkout@v4
+      - name: Update manifests and push to Git
         run: |
           git config --global user.name 'wissNasri'
           git config --global user.email 'wissemnasri81@gmail.com'
           
+          # MODIFIÉ : Récupération des 3 tags d'image
           BACKEND_TAG=${{ needs.build-backend.outputs.image_tag_backend }}
           POPULATE_TAG=${{ needs.build-populate.outputs.image_tag_populate }}
           FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
           
-          # Mise à jour des manifestes dans le dossier de STAGING
-          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_BACKEND }}:\).*|\1$BACKEND_TAG|" kubernetes-manifest-staging/backend.yaml
-          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_FRONTEND }}:\).*|\1$FRONTEND_TAG|" kubernetes-manifest-staging/frontend.yaml
-          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_POPULATE }}:\).*|\1$POPULATE_TAG|" kubernetes-manifest-staging/populate-job.yaml
+          if [ -z "$BACKEND_TAG" ] || [ -z "$FRONTEND_TAG" ] || [ -z "$POPULATE_TAG" ]; then
+            echo "Error: Image tags from previous jobs are empty. Aborting."
+            exit 1
+          fi
           
-          git add kubernetes-manifest-staging/
+          # MODIFIÉ : Mise à jour des 3 fichiers manifestes
+          sed -i "s|\(image: .*iovision-repo:\).*|\1$BACKEND_TAG|" kubernetes-manifest/backend.yaml
+          sed -i "s|\(image: .*quiz-app-repo:\).*|\1$FRONTEND_TAG|" kubernetes-manifest/frontend.yaml
+          sed -i "s|\(image: .*populate-repo:\).*|\1$POPULATE_TAG|" kubernetes-manifest/populate-job.yaml
+          
+          git add kubernetes-manifest/backend.yaml kubernetes-manifest/frontend.yaml kubernetes-manifest/populate-job.yaml
           
           if git diff --cached --quiet; then
-            echo "No changes to commit for staging."
+            echo "No changes to commit."
           else
-            git commit -m "ci(staging): Deploy images for commit ${{ github.sha }}"
+            COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
+            git commit -m "ci(deploy): Update image tags to ${COMMIT_SHA}"
             git push
           fi
 
   # ===================================================================
-  # NOUVEAUX JOBS : Attente du déploiement et Scan DAST
-  # ===================================================================
-  wait-for-staging-deployment:
-    name: "Wait for Staging URL"
-    runs-on: ubuntu-latest
-    needs: update-manifests-staging # Se lance après la mise à jour des manifestes de staging
-    steps:
-      - name: "Wait for application to become available"
-        run: |
-          echo "Waiting 2 minutes for ArgoCD sync and ALB initialization..."
-          sleep 120
-          echo "Checking staging URL availability..."
-          curl --retry 18 --retry-delay 10 --retry-connrefused --silent --show-error --fail "https://quiz-staging.iovision.site"
-          echo "Staging URL is now accessible!"
-
-  dast-scan:
-    name: "DAST Scan (Staging)"
-    runs-on: ubuntu-latest
-    needs: wait-for-staging-deployment # Se lance après que l'URL est prête
-    steps:
-      - name: "Run OWASP ZAP Full Scan"
-        uses: zaproxy/action-full-scan@v0.12.0
-        with:
-          # L'URL de votre application à scanner
-          target: 'https://quiz-staging.iovision.site'
-          
-          # --- MODIFICATIONS CLÉS ---
-          
-          # 1. Ne pas faire échouer le pipeline en cas d'alertes
-          fail_action: false
-          
-          # 2. Ne pas créer d'issue sur GitHub
-          allow_issue_writing: false
-          
-          # --- PARAMÈTRES OPTIONNELS (TOUJOURS UTILES ) ---
-          
-          # Génère un rapport que vous pouvez télécharger et consulter
-          artifact_name: 'zap-scan-report'
-          
-          # Le token n'est plus nécessaire si allow_issue_writing est false,
-          # mais le laisser ne pose pas de problème.
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  # ===================================================================
-  # MODIFICATION : Vos jobs de scan de manifestes dépendent maintenant du DAST
-  # pour s'assurer qu'ils s'exécutent à la fin du flux de validation.
+  # JOB 4: K8S MANIFEST SCAN (MODIFIÉ)
   # ===================================================================
   k8s-manifest-scan:
-    needs: dast-scan # MODIFIÉ : Dépend du succès du DAST
-    # ... (le reste de votre job est inchangé )
-    name: "Scan Kubernetes Manifests"
+    needs: update-manifests
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run Checkov scan
-        uses: bridgecrewio/checkov-action@master
-        with: { directory: './kubernetes-manifest', framework: 'kubernetes' }
-        continue-on-error: true
-      - name: Run Kubescape scan
-        uses: kubescape/github-action@main
-        with: { files: 'kubernetes-manifest/*.yaml' }
-        continue-on-error: true
-
-  gitleaks-scan-manifests:
-    needs: dast-scan # MODIFIÉ : Dépend du succès du DAST
-    # ... (le reste de votre job est inchangé)
-    name: Gitleaks Analysis (kubernetes-manifest)
-    runs-on: ubuntu-latest
-    container: { image: 'zricethezav/gitleaks:latest' }
-    defaults: { run: { working-directory: ./kubernetes-manifest } }
-    steps:
-      - uses: actions/checkout@v4
-      - run: git config --global --add safe.directory $GITHUB_WORKSPACE
-      - run: gitleaks detect --source . --no-git --verbose
-        continue-on-error: true
-  update-manifests-production:
-    name: "Promote to Production: Update Manifests"
-    runs-on: ubuntu-latest
-    
-    # Ce job dépend du succès des scans qui eux-mêmes dépendent du DAST.
-    # Il s'exécute donc à la toute fin de la chaîne de validation.
-    needs: [k8s-manifest-scan, gitleaks-scan-manifests]
-    
-    # Condition : Ce job ne s'exécute que sur la branche 'main' (ou 'master' selon votre nom)
-    # et seulement si les jobs précédents ont réussi.
-    if: github.ref == 'refs/heads/main' && success()
-
-    permissions:
-      contents: write # Nécessaire pour pouvoir pousser des modifications sur le dépôt
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Run Checkov scan (JSON report)
+        uses: bridgecrewio/checkov-action@master   
         with:
-          # On s'assure de récupérer tout l'historique pour pouvoir pousser
-          fetch-depth: 0 
+          directory: ./kubernetes-manifest
+          framework: kubernetes
+          output_format: json
+          output_file_path: ./checkov-report.json
+          quiet: true
+        continue-on-error: true
+      - name: Upload Checkov JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-report
+          path: ./checkov-report.json
+      - name: Run Kubescape scan (JSON report)
+        uses: kubescape/github-action@main   
+        with:
+          files: "kubernetes-manifest/*.yaml"
+          format: json
+          outputFile: ./kubescape-report.json
+        continue-on-error: true
+      - name: Upload Kubescape JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubescape-report
+          path: ./kubescape-report.json
 
-      - name: Update production manifests and push to Git
-        run: |
-          git config --global user.name 'GitHub Actions Bot'
-          git config --global user.email 'actions-bot@github.com'
-          
-          # Récupération des tags d'images des jobs de build qui ont été validés en staging
-          BACKEND_TAG=${{ needs.build-backend.outputs.image_tag_backend }}
-          POPULATE_TAG=${{ needs.build-populate.outputs.image_tag_populate }}
-          FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
-          
-          echo "Promoting to production with the following tags:"
-          echo "Backend: $BACKEND_TAG"
-          echo "Frontend: $FRONTEND_TAG"
-          echo "Populate: $POPULATE_TAG"
-
-          # Mise à jour des manifestes dans le dossier de PRODUCTION
-          # La commande 'sed' recherche la ligne contenant l'image et remplace le tag.
-          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_BACKEND }}:\).*|\1$BACKEND_TAG|" kubernetes-manifest/backend.yaml
-          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_FRONTEND }}:\).*|\1$FRONTEND_TAG|" kubernetes-manifest/frontend.yaml
-          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_POPULATE }}:\).*|\1$POPULATE_TAG|" kubernetes-manifest/populate-job.yaml
-          
-          # Ajout des fichiers modifiés au commit
-          git add kubernetes-manifest/
-          
-          # Commit et push uniquement s'il y a des changements
-          if git diff --cached --quiet; then
-            echo "No changes to commit for production. Manifests are already up-to-date."
-          else
-            git commit -m "ci(prod): Promote images to production for commit ${{ github.sha }}"
-            git push
-            echo "Production manifests updated successfully!"
-          fi
+  # ===================================================================
+  # NOUVEAU JOB : GITLEAKS SCAN POUR LES MANIFESTES
+  # ===================================================================
+  gitleaks-scan-manifests:
+    needs: update-manifests
+    name: Gitleaks Analysis (kubernetes-manifest)
+    runs-on: ubuntu-latest
+    container:
+      image: zricethezav/gitleaks:latest
+    defaults:
+      run:
+        working-directory: ./kubernetes-manifest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Mark GitHub workspace as safe
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+      - name: Run Gitleaks scan on kubernetes-manifest
+        run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-manifests.json
+        continue-on-error: true
+      - name: Upload Gitleaks JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-json-manifests-report
+          path: ./kubernetes-manifest/gitleaks-report-manifests.json
