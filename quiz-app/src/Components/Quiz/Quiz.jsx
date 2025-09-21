@@ -33,7 +33,7 @@ const Quiz = () => {
         // ==================================================================
         // ## RECTIFICATION DEMANDÉE ##
         // L'URL de votre API est maintenant écrite directement ici.
-        const apiUrl = `${import.meta.env.VITE_REACT_APP_API_URL}/questions`;
+        const apiUrl = "https://quiz-staging.iovision.site/questions";
         // ==================================================================
         
         const response = await fetch(apiUrl );
