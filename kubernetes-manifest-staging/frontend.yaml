@@ -23,7 +23,7 @@ spec:
         - configMapRef:
             name: quiz-app-config
         ports:
-        - containerPort: 8080
+        - containerPort: 80
 ---
 apiVersion: v1
 kind: Service
@@ -35,5 +35,8 @@ spec:
     app: frontend
   ports:
   - port: 8080
+  ports:
+  - port: 8080 # Le service peut exposer un port différent
+    targetPort: 80 # Mais il doit cibler le port 80 du conteneur Nginx
     protocol: TCP
   type: ClusterIP
