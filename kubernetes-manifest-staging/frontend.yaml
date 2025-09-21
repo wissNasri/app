@@ -19,7 +19,7 @@ spec:
       - name: frontend
         # Le tag de l'image sera remplacé par la pipeline CI/CD.
         # Le tag initial n'a pas d'importance.
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/quiz-app-repo:latest
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/quiz-app-repo:frontend-b697d8f5
         # La section 'envFrom' est bien supprimée, c'est parfait.
         ports:
         # Le conteneur Nginx expose le port 80.

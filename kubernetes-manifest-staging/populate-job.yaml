@@ -16,7 +16,7 @@ spec:
       containers:
       - name: populate-db
         # L'image sera mise à jour par la pipeline CI
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/populate-repo:populate-7a3d5151
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/populate-repo:populate-b697d8f5
         env:
         - name: MONGO_URI
           valueFrom:
