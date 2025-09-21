@@ -4,11 +4,12 @@ on:
   # Déclenchement automatique sur push vers la branche main
   push:
     branches:
-      - master
+      - main
     paths:
       - 'backend/**'
       - 'quiz-app/**'
       - 'kubernetes-manifest/**'
+      - 'app/.github/workflows/**'
       
 
 
