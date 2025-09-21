@@ -250,10 +250,9 @@ jobs:
   promote-to-production:
     name: "Promote to Production"
     runs-on: ubuntu-latest
-    # Ce job ne s'exécute que si le scan DAST a réussi.
-    needs: [ build-backend, build-frontend, build-populate]
+    needs: [build-backend, build-frontend, build-populate]
     permissions:
-      contents: write # Nécessaire pour pouvoir faire un git push
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -261,34 +260,27 @@ jobs:
 
       - name: Update production manifests and push to Git
         run: |
-          # Configurer Git pour le commit
-          git config --global user.name 'wissNasri'
-          git config --global user.email 'wissemnasri81@gmail.com'
+          git config --global user.name 'GitHub Actions Promoter'
+          git config --global user.email 'actions@github.com'
           
-          # Récupérer les tags des images qui ont été validées
           BACKEND_TAG=${{ needs.build-backend.outputs.image_tag_backend }}
           POPULATE_TAG=${{ needs.build-populate.outputs.image_tag_populate }}
           FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
           
           echo "Promoting Backend: $BACKEND_TAG, Frontend: $FRONTEND_TAG, Populate: $POPULATE_TAG to production."
           
-          # Mettre à jour les manifestes dans le dossier de PRODUCTION
-          # C'est la même logique que pour staging, mais sur le bon répertoire
-          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_BACKEND }}:\ ).*|\1$BACKEND_TAG|" kubernetes-manifest/backend.yaml
-          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_FRONTEND }}:\).*|\1$FRONTEND_TAG|" kubernetes-manifest/frontend.yaml
-          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_POPULATE }}:\).*|\1$POPULATE_TAG|" kubernetes-manifest/populate-job.yaml
+          # --- COMMANDES SED CORRIGÉES ---
+          # La syntaxe est simplifiée pour éviter les erreurs de caractères spéciaux.
+          # On cherche "image: <nom_du_repo>:" et on remplace tout ce qui suit par le nouveau tag.
+          sed -i "s|image: .*/${{ env.ECR_REPOSITORY_BACKEND }}:.*|image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:$BACKEND_TAG|" kubernetes-manifest/backend.yaml
+          sed -i "s|image: .*/${{ env.ECR_REPOSITORY_FRONTEND }}:.*|image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_FRONTEND }}:$FRONTEND_TAG|" kubernetes-manifest/frontend.yaml
+          sed -i "s|image: .*/${{ env.ECR_REPOSITORY_POPULATE }}:.*|image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_POPULATE }}:$POPULATE_TAG|" kubernetes-manifest/populate-job.yaml
           
-          # Ajouter les changements au commit
           git add kubernetes-manifest/
           
-          # Créer un commit et le pousser uniquement s'il y a des changements
           if git diff --cached --quiet; then
             echo "No changes to commit for production."
           else
             git commit -m "ci(prod): Promote validated images to production [commit ${{ github.sha }}]"
             git push
           fi
-          
-
-
-
