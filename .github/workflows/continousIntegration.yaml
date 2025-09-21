@@ -370,8 +370,6 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GH_ACTION_TOKEN }} # PAT requis pour pousser sur le dépôt
       - name: Update staging manifests and push to Git
         run: |
           git config --global user.name 'wissNasri'
