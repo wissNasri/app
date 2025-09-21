@@ -475,3 +475,57 @@ jobs:
       - run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - run: gitleaks detect --source . --no-git --verbose
         continue-on-error: true
+  update-manifests-production:
+    name: "Promote to Production: Update Manifests"
+    runs-on: ubuntu-latest
+    
+    # Ce job dépend du succès des scans qui eux-mêmes dépendent du DAST.
+    # Il s'exécute donc à la toute fin de la chaîne de validation.
+    needs: [k8s-manifest-scan, gitleaks-scan-manifests]
+    
+    # Condition : Ce job ne s'exécute que sur la branche 'main' (ou 'master' selon votre nom)
+    # et seulement si les jobs précédents ont réussi.
+    if: github.ref == 'refs/heads/main' && success()
+
+    permissions:
+      contents: write # Nécessaire pour pouvoir pousser des modifications sur le dépôt
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # On s'assure de récupérer tout l'historique pour pouvoir pousser
+          fetch-depth: 0 
+
+      - name: Update production manifests and push to Git
+        run: |
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'actions-bot@github.com'
+          
+          # Récupération des tags d'images des jobs de build qui ont été validés en staging
+          BACKEND_TAG=${{ needs.build-backend.outputs.image_tag_backend }}
+          POPULATE_TAG=${{ needs.build-populate.outputs.image_tag_populate }}
+          FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
+          
+          echo "Promoting to production with the following tags:"
+          echo "Backend: $BACKEND_TAG"
+          echo "Frontend: $FRONTEND_TAG"
+          echo "Populate: $POPULATE_TAG"
+
+          # Mise à jour des manifestes dans le dossier de PRODUCTION
+          # La commande 'sed' recherche la ligne contenant l'image et remplace le tag.
+          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_BACKEND }}:\).*|\1$BACKEND_TAG|" kubernetes-manifest/backend.yaml
+          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_FRONTEND }}:\).*|\1$FRONTEND_TAG|" kubernetes-manifest/frontend.yaml
+          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_POPULATE }}:\).*|\1$POPULATE_TAG|" kubernetes-manifest/populate-job.yaml
+          
+          # Ajout des fichiers modifiés au commit
+          git add kubernetes-manifest/
+          
+          # Commit et push uniquement s'il y a des changements
+          if git diff --cached --quiet; then
+            echo "No changes to commit for production. Manifests are already up-to-date."
+          else
+            git commit -m "ci(prod): Promote images to production for commit ${{ github.sha }}"
+            git push
+            echo "Production manifests updated successfully!"
+          fi
