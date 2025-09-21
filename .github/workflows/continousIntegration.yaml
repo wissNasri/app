@@ -365,22 +365,29 @@ jobs:
   update-manifests-staging:
     name: "Deploy to Staging: Update Manifests"
     runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend, build-populate] # Dépend toujours des builds
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GH_ACTION_TOKEN }}
-      - name: "Update Staging Manifests"
+          token: ${{ secrets.GH_ACTION_TOKEN }} # PAT requis pour pousser sur le dépôt
+      - name: Update staging manifests and push to Git
         run: |
-          git config --global user.name 'GitHub Actions Bot'
-          git config --global user.email 'actions-bot@github.com'
+          git config --global user.name 'wissNasri'
+          git config --global user.email 'wissemnasri81@gmail.com'
           
-          sed -i 's|\(image: .*/${{ env.ECR_REPOSITORY_BACKEND }}:\).*|\1${{ needs.build-images.outputs.backend_tag }}|' kubernetes-manifest-staging/backend.yaml
-          sed -i 's|\(image: .*/${{ env.ECR_REPOSITORY_FRONTEND }}:\).*|\1${{ needs.build-images.outputs.frontend_tag }}|' kubernetes-manifest-staging/frontend.yaml
-          sed -i 's|\(image: .*/${{ env.ECR_REPOSITORY_POPULATE }}:\).*|\1${{ needs.build-images.outputs.populate_tag }}|' kubernetes-manifest-staging/populate-job.yaml
+          BACKEND_TAG=${{ needs.build-backend.outputs.image_tag_backend }}
+          POPULATE_TAG=${{ needs.build-populate.outputs.image_tag_populate }}
+          FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
+          
+          # Mise à jour des manifestes dans le dossier de STAGING
+          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_BACKEND }}:\).*|\1$BACKEND_TAG|" kubernetes-manifest-staging/backend.yaml
+          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_FRONTEND }}:\).*|\1$FRONTEND_TAG|" kubernetes-manifest-staging/frontend.yaml
+          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_POPULATE }}:\).*|\1$POPULATE_TAG|" kubernetes-manifest-staging/populate-job.yaml
           
           git add kubernetes-manifest-staging/
+          
           if git diff --cached --quiet; then
             echo "No changes to commit for staging."
           else
@@ -388,10 +395,13 @@ jobs:
             git push
           fi
 
+  # ===================================================================
+  # NOUVEAUX JOBS : Attente du déploiement et Scan DAST
+  # ===================================================================
   wait-for-staging-deployment:
     name: "Wait for Staging URL"
     runs-on: ubuntu-latest
-    needs: update-manifests-staging
+    needs: update-manifests-staging # Se lance après la mise à jour des manifestes de staging
     steps:
       - name: "Wait for application to become available"
         run: |
@@ -404,7 +414,7 @@ jobs:
   dast-scan:
     name: "DAST Scan (Staging )"
     runs-on: ubuntu-latest
-    needs: wait-for-staging-deployment
+    needs: wait-for-staging-deployment # Se lance après que l'URL est prête
     steps:
       - name: "Run OWASP ZAP Full Scan"
         uses: zaproxy/action-full-scan@v0.12.0
@@ -414,27 +424,62 @@ jobs:
           allow_issue_writing: true
           issue_title: 'DAST Scan Report - ${{ github.workflow }} #${{ github.run_number }}'
           token: ${{ secrets.GITHUB_TOKEN }}
-          fail_action: true
+          fail_action: true # Fait échouer la pipeline si des alertes sont trouvées
 
   # ===================================================================
-  # PROMOTION MANUELLE VERS LA PRODUCTION
+  # MODIFICATION : Vos jobs de scan de manifestes dépendent maintenant du DAST
+  # pour s'assurer qu'ils s'exécutent à la fin du flux de validation.
+  # ===================================================================
+  k8s-manifest-scan:
+    needs: dast-scan # MODIFIÉ : Dépend du succès du DAST
+    # ... (le reste de votre job est inchangé )
+    name: "Scan Kubernetes Manifests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Checkov scan
+        uses: bridgecrewio/checkov-action@master
+        with: { directory: './kubernetes-manifest', framework: 'kubernetes' }
+        continue-on-error: true
+      - name: Run Kubescape scan
+        uses: kubescape/github-action@main
+        with: { files: 'kubernetes-manifest/*.yaml' }
+        continue-on-error: true
+
+  gitleaks-scan-manifests:
+    needs: dast-scan # MODIFIÉ : Dépend du succès du DAST
+    # ... (le reste de votre job est inchangé)
+    name: Gitleaks Analysis (kubernetes-manifest)
+    runs-on: ubuntu-latest
+    container: { image: 'zricethezav/gitleaks:latest' }
+    defaults: { run: { working-directory: ./kubernetes-manifest } }
+    steps:
+      - uses: actions/checkout@v4
+      - run: git config --global --add safe.directory $GITHUB_WORKSPACE
+      - run: gitleaks detect --source . --no-git --verbose
+        continue-on-error: true
+
+  # ===================================================================
+  # NOUVEAU JOB : Promotion manuelle vers la Production
   # ===================================================================
   update-manifests-production:
     name: "Promote to Production: Update Manifests"
     runs-on: ubuntu-latest
+    # CONDITION : Ne s'exécute que sur déclenchement manuel
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_to_production == true
-    needs: [dast-scan]
+    # Dépend de la réussite de TOUS les scans précédents
+    needs: [k8s-manifest-scan, gitleaks-scan-manifests]
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_ACTION_TOKEN }}
-          fetch-depth: 0
+          fetch-depth: 0 # Récupère tout l'historique
       - name: "Get Image Tags from Latest Main Commit"
         id: get-tags
         run: |
-          LATEST_SHA=$(git rev-parse origin/main )
+          LATEST_SHA=$(git rev-parse origin/main)
           SHA_SHORT=$(echo $LATEST_SHA | cut -c1-8)
           echo "BACKEND_TAG=backend-${SHA_SHORT}" >> $GITHUB_ENV
           echo "FRONTEND_TAG=frontend-${SHA_SHORT}" >> $GITHUB_ENV
@@ -445,9 +490,10 @@ jobs:
           git config --global user.name 'GitHub Actions Bot'
           git config --global user.email 'actions-bot@github.com'
           
-          sed -i 's|\(image: .*/${{ env.ECR_REPOSITORY_BACKEND }}:\).*|\1${{ env.BACKEND_TAG }}|' kubernetes-manifest/backend.yaml
-          sed -i 's|\(image: .*/${{ env.ECR_REPOSITORY_FRONTEND }}:\).*|\1${{ env.FRONTEND_TAG }}|' kubernetes-manifest/frontend.yaml
-          sed -i 's|\(image: .*/${{ env.ECR_REPOSITORY_POPULATE }}:\).*|\1${{ env.POPULATE_TAG }}|' kubernetes-manifest/populate-job.yaml
+          # Mise à jour des manifestes dans le dossier de PRODUCTION
+          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_BACKEND }}:\).*|\1${{ env.BACKEND_TAG }}|" kubernetes-manifest/backend.yaml
+          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_FRONTEND }}:\).*|\1${{ env.FRONTEND_TAG }}|" kubernetes-manifest/frontend.yaml
+          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_POPULATE }}:\).*|\1${{ env.POPULATE_TAG }}|" kubernetes-manifest/populate-job.yaml
           
           git add kubernetes-manifest/
           if git diff --cached --quiet; then
@@ -456,63 +502,3 @@ jobs:
             git commit -m "ci(prod): Promote commit ${{ env.LATEST_SHA_ENV }} to production"
             git push
           fi
-
-  # ===================================================================
-  # JOB 4: K8S MANIFEST SCAN (MODIFIÉ)
-  # ===================================================================
-  k8s-manifest-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Run Checkov scan (JSON report)
-        uses: bridgecrewio/checkov-action@master   
-        with:
-          directory: ./kubernetes-manifest
-          framework: kubernetes
-          output_format: json
-          output_file_path: ./checkov-report.json
-          quiet: true
-        continue-on-error: true
-      - name: Upload Checkov JSON report
-        uses: actions/upload-artifact@v4
-        with:
-          name: checkov-report
-          path: ./checkov-report.json
-      - name: Run Kubescape scan (JSON report)
-        uses: kubescape/github-action@main   
-        with:
-          files: "kubernetes-manifest/*.yaml"
-          format: json
-          outputFile: ./kubescape-report.json
-        continue-on-error: true
-      - name: Upload Kubescape JSON report
-        uses: actions/upload-artifact@v4
-        with:
-          name: kubescape-report
-          path: ./kubescape-report.json
-
-  # ===================================================================
-  # NOUVEAU JOB : GITLEAKS SCAN POUR LES MANIFESTES
-  # ===================================================================
-  gitleaks-scan-manifests:
-    name: Gitleaks Analysis (kubernetes-manifest)
-    runs-on: ubuntu-latest
-    container:
-      image: zricethezav/gitleaks:latest
-    defaults:
-      run:
-        working-directory: ./kubernetes-manifest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Mark GitHub workspace as safe
-        run: git config --global --add safe.directory $GITHUB_WORKSPACE
-      - name: Run Gitleaks scan on kubernetes-manifest
-        run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-manifests.json
-        continue-on-error: true
-      - name: Upload Gitleaks JSON report
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-json-manifests-report
-          path: ./kubernetes-manifest/gitleaks-report-manifests.json
