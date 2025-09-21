@@ -447,7 +447,9 @@ jobs:
         with:
           target: ${{ env.STAGING_URL }}
           fail_action: false
-          report_path: 'zap_report.html'
+          artifact_name: 'zap_scan_report'
+          # MODIFIÉ : Désactive la tentative de création d'issues GitHub
+          allow_issue_writing: false 
 
       - name: "Run Checkov scan on Production manifests"
         uses: bridgecrewio/checkov-action@master
