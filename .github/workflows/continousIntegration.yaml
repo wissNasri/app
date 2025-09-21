@@ -317,11 +317,10 @@ jobs:
   # ===================================================================
   # JOB 2: BUILD & PUSH FRONTEND (INCHANGÉ)
   # ===================================================================
-
   build-frontend:
     name: "Build & Push: Frontend"
     needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
-
+  
     runs-on: ubuntu-latest
     permissions: { id-token: write }
     outputs:
@@ -329,20 +328,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
-        with: { role-to-assume: 'arn:aws:iam::228578233417:role/oicd', aws-region: '${{ env.AWS_REGION }}' }
+        with:
+          role-to-assume: arn:aws:iam::228578233417:role/oicd
+          aws-region: ${{ env.AWS_REGION }}
       - uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
       - name: "Define Frontend Image Tag"
-        id: vars
+        id: vars-frontend
         run: |
           SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
           echo "image_tag=frontend-${SHA_SHORT}" >> $GITHUB_OUTPUT
       - name: "Build, Push & Scan Frontend for Staging"
         run: |
-          IMAGE_URI="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ steps.vars.outputs.image_tag }}"
-          # INJECTION DE L'URL DE STAGING
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ steps.vars.outputs.image_tag }}"
+          
           docker build -t $IMAGE_URI ./quiz-app
-
           docker push $IMAGE_URI
           echo "IMAGE_URI_FOR_SCAN=$IMAGE_URI" >> $GITHUB_ENV
       - name: "Scan Image with Trivy"
@@ -353,6 +354,8 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
+  
+
 
 
   # ===================================================================
