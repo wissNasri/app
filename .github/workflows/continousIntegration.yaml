@@ -4,7 +4,7 @@ on:
   # 1. Déclenchement automatique sur push vers la branche main
   push:
     branches:
-      - main
+      - master
     paths:
       - 'backend/**'
       - 'quiz-app/**'
