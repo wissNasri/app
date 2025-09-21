@@ -263,7 +263,7 @@ jobs:
   # ===================================================================
   build-frontend:
     name: "Build & Push: Frontend"
-    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
+    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,semgrep-scan-backend,gitleaks-scan-backend]
   
     runs-on: ubuntu-latest
     permissions: { id-token: write }
