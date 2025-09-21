@@ -16,7 +16,6 @@ const Quiz = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  
   const Option1 = useRef(null);
   const Option2 = useRef(null);
   const Option3 = useRef(null);
@@ -31,13 +30,9 @@ const Quiz = () => {
       setError(null);
 
       try {
-        // ==================================================================
-        // ## RECTIFICATION DEMANDÉE ##
-        // L'URL de votre API est maintenant écrite directement ici.
         const apiUrl = "https://quiz-staging.iovision.site/questions";
-        // ==================================================================
         
-        const response = await fetch(apiUrl );
+        const response = await fetch(apiUrl);
         if (!response.ok) {
           throw new Error(`Failed to fetch: ${response.statusText}`);
         }
@@ -48,7 +43,7 @@ const Quiz = () => {
         questions = questions.map((q) => ({
           ...q,
           options: [q.option1, q.option2, q.option3, q.option4].filter(opt => opt != null),
-          answer: q.ans,
+          answer: q.ans, // This will be 'A', 'B', 'C', or 'D'
         }));
 
         if (questions.length > 0) {
@@ -84,17 +79,20 @@ const Quiz = () => {
     }
   };
 
-  const checkAns = (e, ans) => {
+  const checkAns = (e, selectedOptionIndex) => {
     if (lock === false) {
-      if (question && question.answer === ans) {
+      // Convert the letter answer to an index (A=0, B=1, C=2, D=3)
+      const correctAnswerIndex = question.answer.charCodeAt(0) - 'A'.charCodeAt(0);
+      
+      if (correctAnswerIndex === selectedOptionIndex) {
         e.target.classList.add("correct");
         setLock(true);
         setScore((prev) => prev + 1);
       } else {
         e.target.classList.add("wrong");
         setLock(true);
-        if (option_array[question.answer - 1].current) {
-          option_array[question.answer - 1].current.classList.add("correct");
+        if (option_array[correctAnswerIndex].current) {
+          option_array[correctAnswerIndex].current.classList.add("correct");
         }
       }
     }
@@ -168,7 +166,7 @@ const Quiz = () => {
           <h2>{index + 1}. {question?.question}</h2>
           <ul>
             {question?.options?.map((option, idx) => (
-              <li key={idx} ref={option_array[idx]} onClick={(e) => { checkAns(e, idx + 1); }}>
+              <li key={idx} ref={option_array[idx]} onClick={(e) => { checkAns(e, idx); }}>
                 {option}
               </li>
             ))}
