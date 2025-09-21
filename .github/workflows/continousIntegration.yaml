@@ -341,10 +341,8 @@ jobs:
         run: |
           IMAGE_URI="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_FRONTEND }}:${{ steps.vars.outputs.image_tag }}"
           # INJECTION DE L'URL DE STAGING
-          docker build \
-            --build-arg VITE_REACT_APP_API_URL="https://quiz-staging.iovision.site/api" \
-            -t $IMAGE_URI \
-            ./quiz-app
+          docker build -t $IMAGE_URI ./quiz-app
+
           docker push $IMAGE_URI
           echo "IMAGE_URI_FOR_SCAN=$IMAGE_URI" >> $GITHUB_ENV
       - name: "Scan Image with Trivy"
