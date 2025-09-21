@@ -3,6 +3,11 @@ kind: Job
 metadata:
   name: populate-db-job
   namespace: quiz
+  # --- AJOUTEZ CE BLOC D'ANNOTATIONS ---
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+  # ------------------------------------
 spec:
   template:
     spec:
@@ -21,3 +26,8 @@ spec:
       restartPolicy: Never
   # Le Job ne doit pas se relancer plus de 4 fois s'il échoue.
   backoffLimit: 4
+
+
+
+
+
