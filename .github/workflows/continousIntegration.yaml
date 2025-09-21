@@ -430,14 +430,14 @@ jobs:
           done
 
       # --- 4. Lancement des scans de sécurité (non-bloquants) ---
-      - name: "Run DAST Scan (OWASP ZAP)"
-        # Pas besoin de if:always() car l'étape précédente ne bloque plus
-        uses: zaproxy/action-full-scan@v0.10.0
+      - name: "Run OWASP ZAP Full Scan"
+        uses: zaproxy/action-full-scan@v0.12.0
         with:
-          target: ${{ env.STAGING_URL }}
+          target: 'https://quiz-staging.iovision.site'
           fail_action: false
           allow_issue_writing: false
-          artifact_name: 'zap_scan_report'
+          artifact_name: 'zap-scan-report'
+          token: ${{ secrets.GITHUB_TOKEN }}
       
       # --- 5. Mise à jour et PUSH pour PRODUCTION ---
       - name: "Update and Push Production Manifests"
