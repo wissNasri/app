@@ -1,15 +1,22 @@
+# Fichier : populate-job.yaml
+
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: populate-db-job
-  namespace: quiz-staging
+  namespace: quiz-staging # ou 'quiz' pour la production
+  # --- AJOUTEZ CE BLOC D'ANNOTATIONS ---
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+  # ------------------------------------
 spec:
   template:
     spec:
       containers:
       - name: populate-db
-        # Le tag de l'image sera remplacé par la pipeline CI/CD
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/populate-repo:populate-0b9f3255
+        # L'image sera mise à jour par la pipeline CI
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/populate-repo:latest 
         env:
         - name: MONGO_URI
           valueFrom:
