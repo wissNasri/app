@@ -138,6 +138,8 @@ jobs:
           args: >
             --scan .
             --enableExperimental
+            --disableOssIndex
+
       - name: Upload Dependency-Check report
         uses: actions/upload-artifact@v4
         with:
@@ -216,6 +218,8 @@ jobs:
           args: >
             --scan .
             --enableExperimental
+            --disableOssIndex
+
       - name: Upload Dependency-Check report
         uses: actions/upload-artifact@v4
         with:
