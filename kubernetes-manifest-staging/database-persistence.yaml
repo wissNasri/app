@@ -4,6 +4,7 @@ metadata:
   name: mongo-pv-quiz-staging
 spec:
   capacity: 
+
   
     storage: 1Gi
   volumeMode: Filesystem
