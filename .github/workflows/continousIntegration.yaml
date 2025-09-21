@@ -402,7 +402,7 @@ jobs:
   # ===================================================================
   # JOB 2 : Attendre la disponibilité du site et lancer les tests
   # ===================================================================
-  test-on-staging-environment:
+  wait:
     name: "Test on Staging Environment"
     runs-on: ubuntu-latest
     needs: [update-staging-manifests]
@@ -440,8 +440,13 @@ jobs:
             
             sleep 20
           done
-
-      # --- ÉTAPE 2 : Scans de sécurité (DAST, Checkov, Gitleaks) ---
+          
+############################
+  dast-scan:
+    name: "DAST Scan (Staging )"
+    runs-on: ubuntu-latest
+    needs: [wait]
+    steps:
       - name: "Run OWASP ZAP Full Scan"
         uses: zaproxy/action-full-scan@v0.12.0
         with:
@@ -450,33 +455,70 @@ jobs:
           allow_issue_writing: false
           artifact_name: 'zap-scan-report'
           token: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: "Run Checkov scan on Production manifests"
-        uses: bridgecrewio/checkov-action@master
+
+
+
+
+   ############################################
+
+  k8s-manifest-scan:
+    needs: [wait]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Run Checkov scan (JSON report)
+        uses: bridgecrewio/checkov-action@master   
         with:
           directory: ./kubernetes-manifest
           framework: kubernetes
-          soft_fail: true
-          output_format: "cli,json"
-          output_file_path: "console,checkov_report.json"
-
-      - name: "Run Gitleaks scan on manifests"
-        uses: gitleaks/gitleaks-action@v2
-        with:
-          path: ./
-          fail: false
-          report_format: "json"
-          report_path: "gitleaks_report.json"
-
-      - name: "Upload Security Reports"
+          output_format: json
+          output_file_path: ./checkov-report.json
+          quiet: true
+        continue-on-error: true
+      - name: Upload Checkov JSON report
         uses: actions/upload-artifact@v4
         with:
-          name: security-reports
-          path: |
-            zap_report.html
-            checkov_report.json
-            gitleaks_report.json
-          retention-days: 7
+          name: checkov-report
+          path: ./checkov-report.json
+      - name: Run Kubescape scan (JSON report)
+        uses: kubescape/github-action@main   
+        with:
+          files: "kubernetes-manifest/*.yaml"
+          format: json
+          outputFile: ./kubescape-report.json
+        continue-on-error: true
+      - name: Upload Kubescape JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubescape-report
+          path: ./kubescape-report.json
+
+  # ===================================================================
+  # NOUVEAU JOB : GITLEAKS SCAN POUR LES MANIFESTES
+  # ===================================================================
+  gitleaks-scan-manifests:
+    needs: [wait]
+    name: Gitleaks Analysis (kubernetes-manifest)
+    runs-on: ubuntu-latest
+    container:
+      image: zricethezav/gitleaks:latest
+    defaults:
+      run:
+        working-directory: ./kubernetes-manifest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Mark GitHub workspace as safe
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+      - name: Run Gitleaks scan on kubernetes-manifest
+        run: gitleaks detect --source . --no-git --verbose --report-format json --report-path gitleaks-report-manifests.json
+        continue-on-error: true
+      - name: Upload Gitleaks JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-json-manifests-report
+          path: ./kubernetes-manifest/gitleaks-report-manifests.json       
 
   # ===================================================================
   # JOB 3 : Promouvoir en Production (inchangé)
@@ -484,7 +526,7 @@ jobs:
   promote-to-production:
     name: "Promote to Production"
     runs-on: ubuntu-latest
-    needs: [test-on-staging-environment]
+    needs: [dast-scan,  k8s-manifest-scan,gitleaks-scan-manifests]
     permissions:
       contents: write
     steps:
