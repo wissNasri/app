@@ -327,6 +327,9 @@ jobs:
       image_tag: ${{ steps.vars.outputs.image_tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_ACTION_TOKEN }} # Et celle-ci aussi
+          fetch-depth: 0
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::228578233417:role/oicd
