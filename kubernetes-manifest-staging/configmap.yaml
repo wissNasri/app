@@ -3,6 +3,7 @@ kind: ConfigMap
 metadata:
   name: quiz-app-config
   namespace: quiz-staging
+  
 data:
   # URL de base de l'API pour l'environnement de staging
   VITE_REACT_APP_API_URL: "https://quiz-staging.iovision.site/api"
