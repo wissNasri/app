@@ -325,7 +325,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions: { id-token: write }
     outputs:
-      image_tag: ${{ steps.vars.outputs.image_tag }}
+      image_tag: ${{ steps.vars-frontend.outputs.image_tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
