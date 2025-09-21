@@ -16,6 +16,7 @@ const Quiz = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  
   const Option1 = useRef(null);
   const Option2 = useRef(null);
   const Option3 = useRef(null);
