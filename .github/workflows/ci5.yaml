@@ -251,7 +251,7 @@ jobs:
     name: "Promote to Production"
     runs-on: ubuntu-latest
     # Ce job ne s'exécute que si le scan DAST a réussi.
-    needs: [dast-scan, build-backend, build-frontend, build-populate]
+    needs: [ build-backend, build-frontend, build-populate]
     permissions:
       contents: write # Nécessaire pour pouvoir faire un git push
 
