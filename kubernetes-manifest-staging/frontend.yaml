@@ -17,13 +17,13 @@ spec:
     spec:
       containers:
       - name: frontend
-        # Le tag de l'image sera remplacé par la pipeline CI/CD.
-        # Le tag initial n'a pas d'importance.
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/quiz-app-repo:frontend-b697d8f5
-        # La section 'envFrom' est bien supprimée, c'est parfait.
+        # Le tag de l'image sera remplacé par la pipeline CI/CD
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/quiz-app-repo:latest
+        envFrom:
+        - configMapRef:
+            name: quiz-app-config
         ports:
-        # Le conteneur Nginx expose le port 80.
-        - containerPort: 80
+        - containerPort: 8080
 ---
 apiVersion: v1
 kind: Service
@@ -34,13 +34,6 @@ spec:
   selector:
     app: frontend
   ports:
-    # La clé "ports" n'apparaît qu'une seule fois.
-    - name: http # C'est une bonne pratique de nommer le port
-      protocol: TCP
-      # Le port sur lequel le service est accessible à l'intérieur du cluster.
-      # L'Ingress et le backend appelleront ce port.
-      port: 8080 
-      # Le port sur lequel le conteneur écoute. Doit correspondre au containerPort du Deployment.
-      # Notre conteneur Nginx écoute sur le port 80.
-      targetPort: 80
+  - port: 8080
+    protocol: TCP
   type: ClusterIP
