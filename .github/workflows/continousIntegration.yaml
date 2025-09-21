@@ -1,7 +1,7 @@
 name: React.js CI + Semgrep
 
 on:
-  # 1. Déclenchement automatique sur push vers la branche main
+  # Déclenchement automatique sur push vers la branche main
   push:
     branches:
       - master
@@ -9,11 +9,7 @@ on:
       - 'backend/**'
       - 'quiz-app/**'
       - 'kubernetes-manifest/**'
-      - 'kubernetes-manifest-staging/**' # Ajouté pour être complet
-      - '.github/workflows/**' # Bonne pratique pour redéclencher si la pipeline change
-
-  # 2. NOUVEAU : Permet le déclenchement manuel depuis l'interface GitHub
-  workflow_dispatch:
+      
 
 
 
@@ -120,7 +116,37 @@ jobs:
           name: gitleaks-json-frontend-report
           path: ./quiz-app/gitleaks-report-frontend.json
     
- 
+  dependency-check-frontend:
+    needs: frontend-test
+    name: OWASP Dependency-Check (quiz-app)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: 'quiz-app/package-lock.json'
+      - name: Install dependencies for analysis
+        working-directory: ./quiz-app
+        run: npm install
+      - name: Run OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'quiz-app-frontend'
+          path: './quiz-app'
+          format: 'HTML'
+          out: 'reports-frontend'
+          args: >
+            --scan .
+            --enableExperimental
+      - name: Upload Dependency-Check report
+        uses: actions/upload-artifact@v4
+        with:
+          name: owasp-dep-check-frontend-report
+          path: reports-frontend
         
   semgrep-scan-backend:
     needs: backend-test
@@ -164,13 +190,47 @@ jobs:
         with:
           name: gitleaks-json-report
           path: ./backend/gitleaks-report-backend.json
-
+  
+  dependency-check-backend:
+    needs: backend-test
+    name: OWASP Dependency-Check (backend)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+      - name: Install dependencies for analysis
+        working-directory: ./backend
+        run: npm install
+      - name: Run OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'quiz-app-backend'
+          path: './backend'
+          format: 'HTML'
+          out: 'reports-backend'
+          args: >
+            --scan .
+            --enableExperimental
+      - name: Upload Dependency-Check report
+        uses: actions/upload-artifact@v4
+        with:
+          name: owasp-dep-check-backend-report
+          path: reports-backend
 
   # ===================================================================
   # JOB MODIFIÉ : BUILD & PUSH BACKEND + POPULATE
   # ===================================================================
   build-backend:
-    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,semgrep-scan-backend,gitleaks-scan-backend]
+    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
     name: "Build & Push: Backend " # MODIFIÉ : Titre du job
     runs-on: ubuntu-latest
     permissions:
@@ -216,7 +276,7 @@ jobs:
 
 
   build-populate:
-    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,semgrep-scan-backend,gitleaks-scan-backend]
+    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
     name: "Build & Push:  Populate" # MODIFIÉ : Titre du job
     runs-on: ubuntu-latest
     permissions:
@@ -263,7 +323,7 @@ jobs:
   # ===================================================================
   build-frontend:
     name: "Build & Push: Frontend"
-    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,semgrep-scan-backend,gitleaks-scan-backend]
+    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
   
     runs-on: ubuntu-latest
     permissions: { id-token: write }
@@ -415,65 +475,3 @@ jobs:
       - run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - run: gitleaks detect --source . --no-git --verbose
         continue-on-error: true
-
-  # ===================================================================
-  # NOUVEAU JOB : Promotion manuelle vers la Production
-  # ===================================================================
-
-
-  # ... (votre pipeline existante jusqu'à la fin des scans)
-
-  # ===================================================================
-  # JOB 4 : DÉPLOIEMENT MANUEL EN PRODUCTION
-  # ===================================================================
-  update-manifests-production:
-    name: "Promote to Production: Update Manifests"
-    runs-on: ubuntu-latest
-    # Ce job ne s'exécute QUE sur déclenchement manuel via workflow_dispatch
-    if: github.event_name == 'workflow_dispatch'
-    
-    # Il a besoin des tags d'images des builds précédents
-    needs: [build-backend, build-frontend, build-populate]
-    
-    permissions:
-      contents: write # Nécessaire pour pousser les modifications
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          # On s'assure de récupérer tout l'historique pour pouvoir pousser
-          fetch-depth: 0 
-
-      - name: Update production manifests and push to Git
-        run: |
-          git config --global user.name 'GitHub Actions Bot'
-          git config --global user.email 'actions-bot@github.com'
-          
-          # Récupération des tags d'images des jobs de build
-          BACKEND_TAG=${{ needs.build-backend.outputs.image_tag_backend }}
-          POPULATE_TAG=${{ needs.build-populate.outputs.image_tag_populate }}
-          FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
-          
-          echo "Promoting to production with the following tags:"
-          echo "Backend: $BACKEND_TAG"
-          echo "Frontend: $FRONTEND_TAG"
-          echo "Populate: $POPULATE_TAG"
-
-          # Mise à jour des manifestes dans le dossier de PRODUCTION
-          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_BACKEND }}:\).*|\1$BACKEND_TAG|" kubernetes-manifest/backend.yaml
-          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_FRONTEND }}:\).*|\1$FRONTEND_TAG|" kubernetes-manifest/frontend.yaml
-          sed -i "s|\(image: .*/${{ env.ECR_REPOSITORY_POPULATE }}:\).*|\1$POPULATE_TAG|" kubernetes-manifest/populate-job.yaml
-          
-          # Ajout des fichiers modifiés au commit
-          git add kubernetes-manifest/
-          
-          # Commit et push uniquement s'il y a des changements
-          if git diff --cached --quiet; then
-            echo "No changes to commit for production. Manifests are already up-to-date."
-          else
-            git commit -m "ci(prod): Promote images to production for commit ${{ github.sha }}"
-            git push
-            echo "Production manifests updated successfully!"
-          fi
- 
