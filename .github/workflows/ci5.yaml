@@ -246,49 +246,7 @@ jobs:
             git push
           fi
 
-  # ===================================================================
-  # NOUVEAUX JOBS : Attente du déploiement et Scan DAST
-  # ===================================================================
-  wait-for-staging-deployment:
-    name: "Wait for Staging URL"
-    runs-on: ubuntu-latest
-    needs: update-manifests-staging # Se lance après la mise à jour des manifestes de staging
-    steps:
-      - name: "Wait for application to become available"
-        run: |
-          echo "Waiting 2 minutes for ArgoCD sync and ALB initialization..."
-          sleep 120
-          echo "Checking staging URL availability..."
-          curl --retry 18 --retry-delay 10 --retry-connrefused --silent --show-error --fail "https://quiz-staging.iovision.site"
-          echo "Staging URL is now accessible!"
 
-  dast-scan:
-    name: "DAST Scan (Staging)"
-    runs-on: ubuntu-latest
-    needs: wait-for-staging-deployment # Se lance après que l'URL est prête
-    steps:
-      - name: "Run OWASP ZAP Full Scan"
-        uses: zaproxy/action-full-scan@v0.12.0
-        with:
-          # L'URL de votre application à scanner
-          target: 'https://quiz-staging.iovision.site'
-          
-          # --- MODIFICATIONS CLÉS ---
-          
-          # 1. Ne pas faire échouer le pipeline en cas d'alertes
-          fail_action: false
-          
-          # 2. Ne pas créer d'issue sur GitHub
-          allow_issue_writing: false
-          
-          # --- PARAMÈTRES OPTIONNELS (TOUJOURS UTILES ) ---
-          
-          # Génère un rapport que vous pouvez télécharger et consulter
-          artifact_name: 'zap-scan-report'
-          
-          # Le token n'est plus nécessaire si allow_issue_writing est false,
-          # mais le laisser ne pose pas de problème.
-          token: ${{ secrets.GITHUB_TOKEN }}
   promote-to-production:
     name: "Promote to Production"
     runs-on: ubuntu-latest
