@@ -9,7 +9,7 @@ spec:
       containers:
       - name: populate-db
         # Le tag de l'image sera remplacé par la pipeline CI/CD
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/populate-repo:latest
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/populate-repo:populate-a21e939a
         env:
         - name: MONGO_URI
           valueFrom:
