@@ -442,15 +442,15 @@ jobs:
           done
 
       # --- ÉTAPE 2 : Scans de sécurité (DAST, Checkov, Gitleaks) ---
-      - name: "Run DAST Scan with OWASP ZAP"
-        uses: zaproxy/action-full-scan@v0.10.0
+      - name: "Run OWASP ZAP Full Scan"
+        uses: zaproxy/action-full-scan@v0.12.0
         with:
-          target: ${{ env.STAGING_URL }}
+          target: 'https://quiz-staging.iovision.site'
           fail_action: false
-          artifact_name: 'zap_scan_report'
-          # MODIFIÉ : Désactive la tentative de création d'issues GitHub
-          allow_issue_writing: false 
-
+          allow_issue_writing: false
+          artifact_name: 'zap-scan-report'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
       - name: "Run Checkov scan on Production manifests"
         uses: bridgecrewio/checkov-action@master
         with:
