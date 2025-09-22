@@ -18,7 +18,7 @@ spec:
       containers:
       - name: frontend
         # Le tag de l'image sera remplacé par la pipeline CI/CD
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/quiz-app-repo:frontend-7f475fea
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/quiz-app-repo:frontend-1d77c70b
         envFrom:
         - configMapRef:
             name: quiz-app-config
