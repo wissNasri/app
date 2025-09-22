@@ -486,11 +486,14 @@ jobs:
             echo "Staging URL not ready (Status: $status_code). Retrying in 20 seconds..."
             sleep 20
           done
+
       - name: "Run OWASP ZAP Full Scan"
         uses: zaproxy/action-full-scan@v0.12.0
         with:
           target: ${{ env.STAGING_URL }}
           fail_action: false
+          allow_issue_writing: false
+          artifact_name: 'zap-scan-report'
           token: ${{ secrets.GITHUB_TOKEN }}
 
   # ===================================================================
