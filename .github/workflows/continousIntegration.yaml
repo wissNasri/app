@@ -289,54 +289,131 @@ jobs:
 
   build-frontend:
     name: "Build & Push: Frontend"
-    needs: [semgrep-scan-frontend, gitleaks-scan-frontend, dependency-check-frontend]
+    # Dépend des tests et scans du frontend
+    needs: [frontend-test, semgrep-scan-frontend, gitleaks-scan-frontend, dependency-check-frontend]
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
+      id-token: write # Permission pour se connecter à AWS
+
     steps:
-      # ... (étapes de checkout, configure-aws, login-ecr identiques) ...
-      - name: "Define & Build & Push Frontend"
+      # Étape 1 : Récupérer le code
+      - name: "Checkout repository"
+        uses: actions/checkout@v4
+
+      # Étape 2 : Se connecter à AWS et à ECR
+      - name: "Configure AWS Credentials"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::228578233417:role/oicd
+          aws-region: ${{ env.AWS_REGION }}
+      - name: "Log in to Amazon ECR"
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Étape 3 : Définir le tag, construire l'image, la pousser et la scanner
+      - name: "Define, Build, Push & Scan Frontend"
         id: build-push-frontend
         run: |
+          # Définit un tag unique basé sur le hash du commit
           SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
           IMAGE_TAG="frontend-${SHA_SHORT}"
+          
+          # Prépare l'URI complet de l'image
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
           IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY_FRONTEND }}:${IMAGE_TAG}"
+          
+          echo "Building and pushing image: $IMAGE_URI"
+          
+          # Construit l'image Docker à partir du dossier 'quiz-app'
           docker build -t $IMAGE_URI ./quiz-app
+          
+          # Pousse l'image vers le registre ECR
           docker push $IMAGE_URI
+          
+          # Sauvegarde le tag et l'URI pour les étapes suivantes (scan et artefact)
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
-      # ... (étape de scan Trivy identique) ...
+          echo "IMAGE_URI=${IMAGE_URI}" >> $GITHUB_ENV
+
+      - name: "Scan Frontend image with Trivy"
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_URI }}
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+      # Étape 4 : Créer l'artefact pour passer le tag au job de déploiement
       - name: "Save Frontend Tag to Artifact"
         run: echo "${{ env.IMAGE_TAG }}" > frontend_tag.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: frontend-tag-artifact
+          name: frontend-tag-artifact # Nom unique pour l'artefact du frontend
           path: frontend_tag.txt
+
 
   build-populate:
     name: "Build & Push: Populate"
-    needs: [semgrep-scan-backend, gitleaks-scan-backend, dependency-check-backend]
+    # Dépend des tests et scans du backend, car il partage le même code source
+    needs: [backend-test, semgrep-scan-backend, gitleaks-scan-backend, dependency-check-backend]
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
+      id-token: write # Permission pour se connecter à AWS
+
     steps:
-      # ... (étapes de checkout, configure-aws, login-ecr identiques) ...
-      - name: "Define & Build & Push Populate"
+      # Étape 1 : Récupérer le code
+      - name: "Checkout repository"
+        uses: actions/checkout@v4
+
+      # Étape 2 : Se connecter à AWS et à ECR
+      - name: "Configure AWS Credentials"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::228578233417:role/oicd
+          aws-region: ${{ env.AWS_REGION }}
+      - name: "Log in to Amazon ECR"
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Étape 3 : Définir le tag, construire l'image, la pousser et la scanner
+      - name: "Define, Build, Push & Scan Populate"
         id: build-push-populate
         run: |
+          # Définit un tag unique basé sur le hash du commit
           SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
           IMAGE_TAG="populate-${SHA_SHORT}"
+          
+          # Prépare l'URI complet de l'image
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
           IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY_POPULATE }}:${IMAGE_TAG}"
+          
+          echo "Building and pushing image: $IMAGE_URI"
+          
+          # Construit l'image en spécifiant le Dockerfile pour le script de peuplement
           docker build -t $IMAGE_URI -f ./backend/Dockerfile.populate ./backend
+          
+          # Pousse l'image vers le registre ECR
           docker push $IMAGE_URI
+          
+          # Sauvegarde le tag et l'URI pour les étapes suivantes
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
-      # ... (étape de scan Trivy identique) ...
+          echo "IMAGE_URI=${IMAGE_URI}" >> $GITHUB_ENV
+
+      - name: "Scan Populate image with Trivy"
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_URI }}
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+      # Étape 4 : Créer l'artefact pour passer le tag au job de déploiement
       - name: "Save Populate Tag to Artifact"
         run: echo "${{ env.IMAGE_TAG }}" > populate_tag.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: populate-tag-artifact
+          name: populate-tag-artifact # Nom unique pour l'artefact du populate
           path: populate_tag.txt
 
   # ===================================================================
