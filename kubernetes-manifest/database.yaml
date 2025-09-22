@@ -1,11 +1,10 @@
-# 05-database.yaml (Version SANS securityContext)
+# kubernetes-manifest/database.yaml (Version MISE À JOUR avec stockage dynamique)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mongo
   namespace: quiz
   labels:
-  
     app: mongo
 spec:
   replicas: 1
@@ -17,7 +16,6 @@ spec:
       labels:
         app: mongo
     spec:
-      # Le bloc securityContext a été supprimé ici.
       containers:
       - name: mongo
         image: mongo:4.4.6
@@ -46,6 +44,7 @@ spec:
       volumes:
       - name: mongo-storage
         persistentVolumeClaim:
+          # Cette partie est INCHANGÉE. Le déploiement continue de référencer le PVC par son nom.
           claimName: mongo-pvc-quiz
 ---    
 apiVersion: v1
@@ -61,3 +60,22 @@ spec:
     port: 27017
     targetPort: 27017
   type: ClusterIP
+---
+# ===================================================================
+# AJOUT : Définition du PersistentVolumeClaim pour le stockage dynamique.
+# Ce bloc remplace le PVC qui se trouvait dans database-persistence.yaml.
+# ===================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongo-pvc-quiz
+  namespace: quiz
+spec: 
+  accessModes:  
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  # CHANGEMENT CRUCIAL : On spécifie le nom de la StorageClass que Terraform a créée.
+  storageClassName: "ebs-storage-class"
+
