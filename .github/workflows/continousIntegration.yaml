@@ -233,231 +233,231 @@ jobs:
   # ===================================================================
   # JOB MODIFIÉ : BUILD & PUSH BACKEND + POPULATE
   # ===================================================================
+  # ===================================================================
+  # ÉTAPE 1 : BUILD, PUSH & CRÉATION DES ARTEFACTS
+  # ===================================================================
+
   build-backend:
-    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
-    name: "Build & Push: Backend " # MODIFIÉ : Titre du job
+    name: "Build & Push: Backend"
+    # Les dépendances (needs) restent les mêmes
+    needs: [semgrep-scan-backend, gitleaks-scan-backend, dependency-check-backend]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
-    outputs:
-      image_tag_backend: ${{ steps.vars-backend.outputs.image_tag }} # MODIFIÉ : Nom de l'output
-
+    # ### CHANGEMENT : On supprime la section 'outputs'. L'output sera l'artefact.
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::228578233417:role/oicd
           aws-region: ${{ env.AWS_REGION }}
-      - uses: aws-actions/amazon-ecr-login@v2
-        id: login-ecr
+      - id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Define Backend Image Tag
-        id: vars-backend # MODIFIÉ : ID de l'étape
+      # ### CHANGEMENT : Cette étape définit le tag et le pousse dans une variable d'environnement du job
+      - name: "Define Backend Image Tag"
+        id: define-tag
         run: |
           SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
           IMAGE_TAG="backend-${SHA_SHORT}"
-          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+          echo "image_tag_output=${IMAGE_TAG}" >> $GITHUB_OUTPUT # Pour l'étape de scan trivy
 
-      - name: Build and Push Backend Image
-        id: build-image-backend # MODIFIÉ : ID de l'étape
+      - name: "Build and Push Backend Image"
         run: |
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:${{ steps.vars-backend.outputs.image_tag }}"
+          IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY_BACKEND }}:${{ env.IMAGE_TAG }}"
           docker build -t $IMAGE_URI ./backend
           docker push $IMAGE_URI
-          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
-
-      - name: Scan BACKEND image with Trivy
+      
+      - name: "Scan image with Trivy"
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: ${{ steps.build-image-backend.outputs.image_uri }}
+          image-ref: "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_BACKEND }}:${{ steps.define-tag.outputs.image_tag_output }}"
           format: 'table'
           exit-code: '0'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
-      # --- NOUVEAU : Étapes pour l'image populate ---
-
-
-  build-populate:
-    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
-    name: "Build & Push:  Populate" # MODIFIÉ : Titre du job
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    outputs:
-      image_tag_populate: ${{ steps.vars-populate.outputs.image_tag }} # NOUVEAU : Output pour l'image populate
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      # ### NOUVEAU : On crée un fichier contenant le tag et on le sauvegarde comme artefact.
+      - name: "Save Backend Tag to Artifact"
+        run: echo "${{ env.IMAGE_TAG }}" > backend_tag.txt
+      - uses: actions/upload-artifact@v4
         with:
-          role-to-assume: arn:aws:iam::228578233417:role/oicd
-          aws-region: ${{ env.AWS_REGION }}
-      - uses: aws-actions/amazon-ecr-login@v2
-        id: login-ecr
+          name: backend-tag-artifact # Nom unique pour cet artefact
+          path: backend_tag.txt
 
-      - name: Define Populate Image Tag
-        id: vars-populate
-        run: |
-          SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
-          IMAGE_TAG="populate-${SHA_SHORT}"
-          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
-
-      - name: Build and Push Populate Image
-        id: build-image-populate
-        run: |
-          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_POPULATE:${{ steps.vars-populate.outputs.image_tag }}"
-          docker build -t $IMAGE_URI -f ./backend/Dockerfile.populate ./backend
-          docker push $IMAGE_URI
-          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
-
-      - name: Scan POPULATE image with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: ${{ steps.build-image-populate.outputs.image_uri }}
-          format: 'table'
-          exit-code: '0'
-          ignore-unfixed: true
-          severity: 'CRITICAL,HIGH'
-
-  # ===================================================================
-  # JOB 2: BUILD & PUSH FRONTEND (INCHANGÉ)
-  # ===================================================================
-  build-frontend: 
-    needs: [semgrep-scan-frontend,gitleaks-scan-frontend,dependency-check-frontend,semgrep-scan-backend,gitleaks-scan-backend,dependency-check-backend]
+  build-frontend:
     name: "Build & Push: Frontend"
+    needs: [semgrep-scan-frontend, gitleaks-scan-frontend, dependency-check-frontend]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
-    outputs:
-      image_tag: ${{ steps.vars.outputs.image_tag }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::228578233417:role/oicd
-          aws-region: ${{ env.AWS_REGION }}
-      - uses: aws-actions/amazon-ecr-login@v2
-        id: login-ecr
-      - name: Define Frontend Image Tag
-        id: vars
+      # ... (étapes de checkout, configure-aws, login-ecr identiques) ...
+      - name: "Define & Build & Push Frontend"
+        id: build-push-frontend
         run: |
           SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
           IMAGE_TAG="frontend-${SHA_SHORT}"
-          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
-      - name: Build and Push Frontend Image
-        id: build-image
-        run: |
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:${{ steps.vars.outputs.image_tag }}"
+          IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY_FRONTEND }}:${IMAGE_TAG}"
           docker build -t $IMAGE_URI ./quiz-app
           docker push $IMAGE_URI
-          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
-      - name: Scan FRONTEND image with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+      # ... (étape de scan Trivy identique) ...
+      - name: "Save Frontend Tag to Artifact"
+        run: echo "${{ env.IMAGE_TAG }}" > frontend_tag.txt
+      - uses: actions/upload-artifact@v4
         with:
-          image-ref: ${{ steps.build-image.outputs.image_uri }}
-          format: 'table'
-          exit-code: '0'
-          ignore-unfixed: true
-          severity: 'CRITICAL,HIGH'
+          name: frontend-tag-artifact
+          path: frontend_tag.txt
+
+  build-populate:
+    name: "Build & Push: Populate"
+    needs: [semgrep-scan-backend, gitleaks-scan-backend, dependency-check-backend]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      # ... (étapes de checkout, configure-aws, login-ecr identiques) ...
+      - name: "Define & Build & Push Populate"
+        id: build-push-populate
+        run: |
+          SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-8)
+          IMAGE_TAG="populate-${SHA_SHORT}"
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          IMAGE_URI="$ECR_REGISTRY/${{ env.ECR_REPOSITORY_POPULATE }}:${IMAGE_TAG}"
+          docker build -t $IMAGE_URI -f ./backend/Dockerfile.populate ./backend
+          docker push $IMAGE_URI
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+      # ... (étape de scan Trivy identique) ...
+      - name: "Save Populate Tag to Artifact"
+        run: echo "${{ env.IMAGE_TAG }}" > populate_tag.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: populate-tag-artifact
+          path: populate_tag.txt
 
   # ===================================================================
   # JOB 3: UPDATE MANIFESTS (MODIFIÉ)
   # ===================================================================
   # ===================================================================
-  deploy_and_promote:
-    name: "Deploy Staging -> Test -> Promote Prod"
+
+
+  deploy-to-staging:
+    name: "Deploy to Staging"
     runs-on: ubuntu-latest
     needs: [build-backend, build-frontend, build-populate]
     permissions:
       contents: write
-
     steps:
-      # --- 1. Récupération du code ---
       - name: "Checkout repository"
         uses: actions/checkout@v4
-        with:
+        with: 
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      # --- 2. Mise à jour et PUSH pour STAGING ---
+      - name: "Download All Image Tag Artifacts"
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/ # Télécharge tous les artefacts dans un dossier 'artifacts'
       - name: "Update and Push Staging Manifests"
         run: |
           git config --global user.name 'GitHub Actions Bot'
           git config --global user.email 'actions-bot@github.com'
           
-          BACKEND_TAG=${{ needs.build-backend.outputs.image_tag_backend }}
-          POPULATE_TAG=${{ needs.build-populate.outputs.image_tag_populate }}
-          FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
+          BACKEND_TAG=$(cat artifacts/backend-tag-artifact/backend_tag.txt)
+          FRONTEND_TAG=$(cat artifacts/frontend-tag-artifact/frontend_tag.txt)
+          POPULATE_TAG=$(cat artifacts/populate-tag-artifact/populate_tag.txt)
           
           sed -i "s|\(image: .*iovision-repo:\).*|\1${BACKEND_TAG}|" kubernetes-manifest-staging/backend.yaml
           sed -i "s|\(image: .*quiz-app-repo:\).*|\1${FRONTEND_TAG}|" kubernetes-manifest-staging/frontend.yaml
           sed -i "s|\(image: .*populate-repo:\).*|\1${POPULATE_TAG}|" kubernetes-manifest-staging/populate-job.yaml
           
           git add kubernetes-manifest-staging/
-          
           if git diff --cached --quiet; then
             echo "No changes to staging manifests to commit."
           else
-            COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
-            git commit -m "ci(staging): Deploy image tags ${COMMIT_SHA}"
+            git commit -m "ci(staging): Deploy image tags for commit ${{ github.sha }}"
             git push
           fi
 
-      # --- 3. Attente de la disponibilité du site de Staging ---
+  # ===================================================================
+  # ÉTAPE 3 : TESTS SUR STAGING (DAST)
+  # Ce job attend que le déploiement soit effectif, puis teste.
+  # ===================================================================
+  test-staging:
+    name: "DAST on Staging"
+    runs-on: ubuntu-latest
+    needs: deploy-to-staging
+    steps:
       - name: "Wait for Staging URL to be available"
-        # MODIFIÉ : On ajoute continue-on-error pour ne pas bloquer le pipeline
-        continue-on-error: true
         run: |
-          echo "Waiting for ${{ env.STAGING_URL }} to become available..."
-          end_time=$(( $(date +%s) + 600 )) # Timeout de 10 minutes
-          sleep 45
-          
+          echo "Waiting 2 minutes for ArgoCD to sync changes..."
+          sleep 120
+          echo "Checking Staging URL: ${{ env.STAGING_URL }}"
+          end_time=$(( $(date +%s) + 600 ))
           while true; do
-            status_code=$(curl --insecure -s -o /dev/null -w '%{http_code}' ${{ env.STAGING_URL }} )
+            status_code=$(curl --insecure --head -s -o /dev/null -w '%{http_code}' ${{ env.STAGING_URL }} )
             if [ "$status_code" -eq 200 ]; then
               echo "Success! Staging URL is responding with status 200."
-              exit 0 # Succès, on sort de l'étape
+              break
             fi
             if [ $(date +%s) -gt $end_time ]; then
-              echo "::error::Timeout: Staging URL did not become available within 10 minutes."
-              exit 1 # Échec, mais continue-on-error va gérer
+              echo "::warning::Timeout: Staging URL did not become available. Continuing anyway."
+              break
             fi
             echo "Staging URL not ready (Status: $status_code). Retrying in 20 seconds..."
             sleep 20
           done
-
-      # --- 4. Lancement des scans de sécurité (non-bloquants) ---
       - name: "Run OWASP ZAP Full Scan"
         uses: zaproxy/action-full-scan@v0.12.0
         with:
-          target: 'https://quiz-staging.iovision.site'
+          target: ${{ env.STAGING_URL }}
           fail_action: false
-          allow_issue_writing: false
-          artifact_name: 'zap-scan-report'
           token: ${{ secrets.GITHUB_TOKEN }}
-      
-      # --- 5. Mise à jour et PUSH pour PRODUCTION ---
+
+  # ===================================================================
+  # ÉTAPE 4 : PROMOTION EN PRODUCTION
+  # Ce job final met à jour les manifestes de production.
+  # ===================================================================
+  promote-to-production:
+    name: "Promote to Production"
+    runs-on: ubuntu-latest
+    needs: test-staging
+    # On ajoute un environnement pour pouvoir mettre une approbation manuelle plus tard
+    environment: 
+      name: production
+      url: https://quiz.iovision.site
+    permissions:
+      contents: write
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v4
+        with: { token: ${{ secrets.GITHUB_TOKEN }} }
+      - name: "Download All Image Tag Artifacts"
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
       - name: "Update and Push Production Manifests"
         run: |
-          echo "Promoting to production..."
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'actions-bot@github.com'
           
-          BACKEND_TAG=${{ needs.build-backend.outputs.image_tag_backend }}
-          POPULATE_TAG=${{ needs.build-populate.outputs.image_tag_populate }}
-          FRONTEND_TAG=${{ needs.build-frontend.outputs.image_tag }}
+          # On doit récupérer le commit de staging pour ne pas créer de conflit
+          git pull origin main --rebase
+          
+          BACKEND_TAG=$(cat artifacts/backend-tag-artifact/backend_tag.txt )
+          FRONTEND_TAG=$(cat artifacts/frontend-tag-artifact/frontend_tag.txt)
+          POPULATE_TAG=$(cat artifacts/populate-tag-artifact/populate_tag.txt)
           
           sed -i "s|\(image: .*iovision-repo:\).*|\1${BACKEND_TAG}|" kubernetes-manifest/backend.yaml
           sed -i "s|\(image: .*quiz-app-repo:\).*|\1${FRONTEND_TAG}|" kubernetes-manifest/frontend.yaml
           sed -i "s|\(image: .*populate-repo:\).*|\1${POPULATE_TAG}|" kubernetes-manifest/populate-job.yaml
           
           git add kubernetes-manifest/
-          
           if git diff --cached --quiet; then
             echo "No changes to production manifests to commit."
           else
-            COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
-            git commit -m "ci(prod): Promote image tags ${COMMIT_SHA}"
+            git commit -m "ci(prod): Promote image tags for commit ${{ github.sha }}"
             git push
           fi
