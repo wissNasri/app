@@ -1,13 +1,15 @@
+# kubernetes-manifest-staging/database.yaml (Version MISE À JOUR avec stockage dynamique)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mongo
-  namespace: quiz-staging
+  # Note: Les noms peuvent être spécifiques à staging, ex: 'mongo-staging'
+  # Si vos noms sont les mêmes, laissez-les tels quels.
+  name: mongo 
+  namespace: quiz-staging # Assumant que vous avez un namespace de staging
   labels:
     app: mongo
 spec:
   replicas: 1
-  
   selector:
     matchLabels:
       app: mongo
@@ -24,10 +26,19 @@ spec:
         volumeMounts:
         - name: mongo-storage
           mountPath: /data/db
+        # ... (probes et resources restent les mêmes) ...
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
       volumes:
       - name: mongo-storage
         persistentVolumeClaim:
-          claimName: mongo-pvc-quiz-staging # <-- Pointeur vers le PVC de staging
+          # Le nom du PVC doit correspondre à celui défini plus bas
+          claimName: mongo-pvc-quiz-staging
 ---    
 apiVersion: v1
 kind: Service
@@ -42,3 +53,21 @@ spec:
     port: 27017
     targetPort: 27017
   type: ClusterIP
+---
+# ===================================================================
+# AJOUT : Définition du PersistentVolumeClaim pour le stockage dynamique de STAGING
+# ===================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  # Il est recommandé d'avoir un nom de PVC unique pour staging
+  name: mongo-pvc-quiz-staging
+  namespace: quiz-staging
+spec: 
+  accessModes:  
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi # Même taille que la prod pour la parité
+  # On utilise la MÊME StorageClass, car elle est définie au niveau du cluster
+  storageClassName: "ebs-storage-class"
