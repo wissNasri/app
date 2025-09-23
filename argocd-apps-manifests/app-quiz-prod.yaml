@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: quiz-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/wissNasri/app.git'
+    targetRevision: HEAD
+    path: kubernetes-manifest # Le répertoire pour l'environnement de production
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: quiz # Le namespace cible pour la production
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
