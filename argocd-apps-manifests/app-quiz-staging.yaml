@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  # Nom de l'application DANS Argo CD
+  name: quiz-staging
+  # L'application elle-même sera dans le namespace d'Argo CD
+  namespace: argocd
+  # Empêche la suppression en cascade si l'app racine est supprimée
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  # Le projet Argo CD à utiliser (par défaut, c'est 'default')
+  project: default
+
+  # SOURCE : Où se trouvent les manifestes de l'application
+  source:
+    repoURL: 'https://github.com/wissNasri/app.git' # L'URL de VOTRE dépôt
+    targetRevision: HEAD # Toujours suivre la dernière version de la branche principale
+    path: kubernetes-manifest-staging # Le répertoire pour l'environnement de staging
+
+  # DESTINATION : Où déployer les manifestes
+  destination:
+    server: 'https://kubernetes.default.svc' # L'URL du cluster où Argo CD est installé
+    namespace: quiz-staging # Le namespace cible pour cette application
+
+  # POLITIQUE DE SYNCHRONISATION
+  syncPolicy:
+    automated:
+      prune: true # Supprime les anciennes ressources qui ne sont plus dans Git
+      selfHeal: true # Répare automatiquement si l'état du cluster dérive de Git
+    syncOptions:
+      - CreateNamespace=true # Crée le namespace s'il n'existe pas
