@@ -541,3 +541,65 @@ jobs:
             git commit -m "ci(prod): Promote image tags for commit ${{ github.sha }}"
             git push
           fi
+  k8s-manifest-scan:
+    name: "Scan K8s Manifests (Checkov & Kubescape)"
+    # S'exécute après la mise à jour des manifestes de production
+    needs: promote-to-production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Run Checkov scan on production manifests
+        uses: bridgecrewio/checkov-action@master   
+        with:
+          directory: ./kubernetes-manifest
+          framework: kubernetes
+          output_format: json
+          output_file_path: ./checkov-report.json
+          # continue-on-error est utilisé pour que le pipeline ne s'arrête pas
+          # et que le scan Kubescape puisse aussi s'exécuter.
+          soft_fail: true 
+
+      - name: Upload Checkov JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-k8s-report
+          path: ./checkov-report.json
+          
+      - name: Run Kubescape scan on production manifests
+        uses: kubescape/github-action@main   
+        with:
+          files: "kubernetes-manifest/*.yaml"
+          format: json
+          outputFile: ./kubescape-report.json
+        continue-on-error: true # Permet au pipeline de continuer même si des erreurs sont trouvées
+
+      - name: Upload Kubescape JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubescape-k8s-report
+          path: ./kubescape-report.json
+
+  gitleaks-scan-manifests:
+    name: "Gitleaks Scan on K8s Manifests"
+    # S'exécute en parallèle du scan Checkov/Kubescape
+    needs: promote-to-production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Run Gitleaks scan on kubernetes-manifest
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          # Cible le dossier spécifique
+          path: ./kubernetes-manifest
+          # continue-on-error est géré par l'action elle-même (par défaut, elle n'échoue pas)
+          
+      - name: Upload Gitleaks report
+        if: failure() # Gitleaks crée un artefact uniquement s'il trouve quelque chose
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-k8s-report
+          path: gitleaks-report.json
