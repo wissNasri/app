@@ -10,6 +10,14 @@ on:
       - 'quiz-app/**'
       - 'kubernetes-manifest/**'
       - 'kubernetes-manifest-staging/**'
+  pull_request:   # ✅ Ajout
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'quiz-app/**'
+      - 'kubernetes-manifest/**'
+      - 'kubernetes-manifest-staging/**'
 
 env:
   AWS_REGION: ${{ vars.APP_AWS_REGION }}
