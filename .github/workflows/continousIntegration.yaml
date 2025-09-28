@@ -444,6 +444,8 @@ jobs:
           path: artifacts/ 
       - name: "Update and Push Staging Manifests"
         run: |
+          git pull origin main --rebase
+
           git config --global user.name 'GitHub Actions Bot'
           git config --global user.email 'actions-bot@github.com'
           BACKEND_TAG=$(cat artifacts/backend-tag-artifact/backend_tag.txt)
