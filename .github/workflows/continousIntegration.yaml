@@ -23,7 +23,6 @@ env:
   ECR_REPOSITORY_BACKEND: "iovision-repo"
   ECR_REPOSITORY_FRONTEND: "quiz-app-repo"
   ECR_REPOSITORY_POPULATE: "populate-repo" 
-  STAGING_URL: ${{ vars.APP_STAGING_URL }}
 
 jobs:
   # ===================================================================
