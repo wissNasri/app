@@ -3,7 +3,7 @@ name: CI/CD with Staging, DAST, and Production Promotion
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - 'backend/**'
       - 'quiz-app/**'
