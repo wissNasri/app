@@ -1,6 +1,5 @@
 # .github/workflows/continousIntegration.yaml (Version mise à jour)
 name: CI/CD with Staging, DAST, and Production Promotion
-
 on:
   push:
     branches:
@@ -490,7 +489,6 @@ jobs:
             echo "Staging URL not ready (Status: $status_code). Retrying in 20 seconds..."
             sleep 20
           done
-
       - name: "Run OWASP ZAP Full Scan"
         uses: zaproxy/action-full-scan@v0.12.0
         with:
@@ -526,19 +524,14 @@ jobs:
       - name: "Update and Push Production Manifests"
         run: |
           git config --global user.name 'GitHub Actions Bot'
-          git config --global user.email 'actions-bot@github.com'
-          
-          # On doit récupérer le commit de staging pour ne pas créer de conflit
+          git config --global user.email 'actions-bot@github.com'        
           git pull origin main --rebase
-          
           BACKEND_TAG=$(cat artifacts/backend-tag-artifact/backend_tag.txt )
           FRONTEND_TAG=$(cat artifacts/frontend-tag-artifact/frontend_tag.txt)
-          POPULATE_TAG=$(cat artifacts/populate-tag-artifact/populate_tag.txt)
-          
+          POPULATE_TAG=$(cat artifacts/populate-tag-artifact/populate_tag.txt)         
           sed -i "s|\(image: .*iovision-repo:\).*|\1${BACKEND_TAG}|" kubernetes-manifest/backend.yaml
           sed -i "s|\(image: .*quiz-app-repo:\).*|\1${FRONTEND_TAG}|" kubernetes-manifest/frontend.yaml
-          sed -i "s|\(image: .*populate-repo:\).*|\1${POPULATE_TAG}|" kubernetes-manifest/populate-job.yaml
-          
+          sed -i "s|\(image: .*populate-repo:\).*|\1${POPULATE_TAG}|" kubernetes-manifest/populate-job.yaml         
           git add kubernetes-manifest/
           if git diff --cached --quiet; then
             echo "No changes to production manifests to commit."
@@ -548,13 +541,11 @@ jobs:
           fi
   k8s-manifest-scan:
     name: "Scan K8s Manifests (Checkov & Kubescape)"
-    # S'exécute après la mise à jour des manifestes de production
     needs: promote-to-production
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        
+        uses: actions/checkout@v4        
       - name: Run Checkov scan on production manifests
         uses: bridgecrewio/checkov-action@master   
         with:
@@ -562,48 +553,37 @@ jobs:
           framework: kubernetes
           output_format: json
           output_file_path: ./checkov-report.json
-          # continue-on-error est utilisé pour que le pipeline ne s'arrête pas
-          # et que le scan Kubescape puisse aussi s'exécuter.
           soft_fail: true 
-
       - name: Upload Checkov JSON report
         uses: actions/upload-artifact@v4
         with:
           name: checkov-k8s-report
-          path: ./checkov-report.json
-          
+          path: ./checkov-report.json        
       - name: Run Kubescape scan on production manifests
         uses: kubescape/github-action@main   
         with:
           files: "kubernetes-manifest/*.yaml"
           format: json
           outputFile: ./kubescape-report.json
-        continue-on-error: true # Permet au pipeline de continuer même si des erreurs sont trouvées
-
+        continue-on-error: true
       - name: Upload Kubescape JSON report
         uses: actions/upload-artifact@v4
         with:
           name: kubescape-k8s-report
           path: ./kubescape-report.json
-
   gitleaks-scan-manifests:
     name: "Gitleaks Scan on K8s Manifests"
-    # S'exécute en parallèle du scan Checkov/Kubescape
     needs: promote-to-production
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        
+        uses: actions/checkout@v4       
       - name: Run Gitleaks scan on kubernetes-manifest
         uses: gitleaks/gitleaks-action@v2
         with:
-          # Cible le dossier spécifique
-          path: ./kubernetes-manifest
-          # continue-on-error est géré par l'action elle-même (par défaut, elle n'échoue pas)
-          
+          path: ./kubernetes-manifest        
       - name: Upload Gitleaks report
-        if: failure() # Gitleaks crée un artefact uniquement s'il trouve quelque chose
+        if: failure() 
         uses: actions/upload-artifact@v4
         with:
           name: gitleaks-k8s-report
