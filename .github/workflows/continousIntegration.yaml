@@ -443,20 +443,17 @@ jobs:
       - name: "Download All Image Tag Artifacts"
         uses: actions/download-artifact@v4
         with:
-          path: artifacts/ # Télécharge tous les artefacts dans un dossier 'artifacts'
+          path: artifacts/ 
       - name: "Update and Push Staging Manifests"
         run: |
           git config --global user.name 'GitHub Actions Bot'
           git config --global user.email 'actions-bot@github.com'
-          
           BACKEND_TAG=$(cat artifacts/backend-tag-artifact/backend_tag.txt)
           FRONTEND_TAG=$(cat artifacts/frontend-tag-artifact/frontend_tag.txt)
           POPULATE_TAG=$(cat artifacts/populate-tag-artifact/populate_tag.txt)
-          
           sed -i "s|\(image: .*iovision-repo:\).*|\1${BACKEND_TAG}|" kubernetes-manifest-staging/backend.yaml
           sed -i "s|\(image: .*quiz-app-repo:\).*|\1${FRONTEND_TAG}|" kubernetes-manifest-staging/frontend.yaml
           sed -i "s|\(image: .*populate-repo:\).*|\1${POPULATE_TAG}|" kubernetes-manifest-staging/populate-job.yaml
-          
           git add kubernetes-manifest-staging/
           if git diff --cached --quiet; then
             echo "No changes to staging manifests to commit."
