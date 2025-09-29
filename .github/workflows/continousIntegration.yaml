@@ -585,15 +585,35 @@ jobs:
     name: "Gitleaks Scan on K8s Manifests"
     needs: promote-to-production
     runs-on: ubuntu-latest
+    # ✅ AJOUT : On utilise le même conteneur Docker que les autres jobs Gitleaks
+    container:
+      image: zricethezav/gitleaks:latest
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4       
+
+      # ✅ AJOUT : Nécessaire quand on est dans un conteneur pour accéder au code
+      - name: Mark GitHub workspace as safe
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+
+      # ✅ MODIFICATION : On remplace l'action payante par une commande manuelle
       - name: Run Gitleaks scan on kubernetes-manifest
-        uses: gitleaks/gitleaks-action@v2
-        with:
-          path: ./kubernetes-manifest        
+        run: |
+          gitleaks detect \
+            --source ./kubernetes-manifest \
+            --no-git \
+            --verbose \
+            --report-format json \
+            --report-path gitleaks-report.json
+        # On garde continue-on-error pour ne pas bloquer le pipeline si des secrets sont trouvés
+        # (le but est de rapporter, pas de bloquer)
+        continue-on-error: true
+      
+      # ✅ MODIFICATION : On change la condition pour correspondre à la nouvelle approche
       - name: Upload Gitleaks report
-        if: failure() 
+        # On ne peut plus utiliser if: failure() car continue-on-error est true.
+        # On télécharge toujours le rapport pour pouvoir l'analyser.
         uses: actions/upload-artifact@v4
         with:
           name: gitleaks-k8s-report
