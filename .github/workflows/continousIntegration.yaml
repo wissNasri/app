@@ -433,19 +433,41 @@ jobs:
     needs: [build-backend, build-frontend, build-populate]
     permissions:
       contents: write
+      # ✅ NOUVEAU : La permission 'actions:read' est requise pour télécharger les artefacts
+      actions: read
     steps:
       - name: "Checkout repository"
         uses: actions/checkout@v4
         with: 
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: "Download All Image Tag Artifacts"
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts/ 
+
+      # ✅ CORRECTION : Ajout de l'installation de l'extension
+      - name: "Download All Image Tag Artifacts with Retries"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Étape 1 : Installer l'extension nécessaire
+          gh extension install actions/gh-actions-artifact
+
+          # Étape 2 : Boucle de tentatives (inchangée)
+          for i in {1..5}; do
+            echo "Attempting to download artifacts (Attempt $i)..."
+            # La commande fonctionnera maintenant que l'extension est installée
+            gh actions-artifact-download --path artifacts/ && break
+            echo "Download failed. Retrying in 15 seconds..."
+            sleep 15
+          done
+          
+          # Vérification finale (inchangée)
+          if [ ! -d "artifacts" ]; then
+            echo "::error::Failed to download artifacts after multiple attempts."
+            exit 1
+          fi
+
       - name: "Update and Push Staging Manifests"
         run: |
+          # ... (le reste du job est inchangé) ...
           git pull origin main --rebase
-
           git config --global user.name 'GitHub Actions Bot'
           git config --global user.email 'actions-bot@github.com'
           BACKEND_TAG=$(cat artifacts/backend-tag-artifact/backend_tag.txt)
@@ -461,6 +483,7 @@ jobs:
             git commit -m "ci(staging): Deploy image tags for commit ${{ github.sha }}"
             git push
           fi
+
 
   # ===================================================================
   # ÉTAPE 3 : TESTS SUR STAGING (DAST)
@@ -512,49 +535,48 @@ jobs:
       url: https://quiz.iovision.site
     permissions:
       contents: write
+      # ✅ NOUVEAU : La permission 'actions:read' est requise
+      actions: read
     steps:
       - name: "Checkout repository"
         uses: actions/checkout@v4
         with: 
          token: ${{ secrets.GITHUB_TOKEN }} 
 
-      # ✅ MODIFICATION : Remplacement de l'ancienne étape par celle-ci
+      # ✅ CORRECTION : Ajout de l'installation de l'extension
       - name: "Download All Image Tag Artifacts with Retries"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Boucle pour tenter le téléchargement jusqu'à 5 fois
+          # Étape 1 : Installer l'extension
+          gh extension install actions/gh-actions-artifact
+
+          # Étape 2 : Boucle de tentatives
           for i in {1..5}; do
             echo "Attempting to download artifacts (Attempt $i )..."
-            # La commande 'gh actions-artifact-download' télécharge tous les artefacts
-            # Le '&& break' arrête la boucle si le téléchargement réussit
             gh actions-artifact-download --path artifacts/ && break
             echo "Download failed. Retrying in 15 seconds..."
             sleep 15
           done
           
-          # Vérification finale pour s'assurer que les artefacts sont bien là
+          # Vérification finale
           if [ ! -d "artifacts" ]; then
             echo "::error::Failed to download artifacts after multiple attempts."
             exit 1
           fi
-        env:
-          # La commande 'gh' a besoin du token pour s'authentifier
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "Update and Push Production Manifests"
         run: |
+          # ... (le reste du job est inchangé) ...
           git config --global user.name 'GitHub Actions Bot'
           git config --global user.email 'actions-bot@github.com'        
           git pull origin main --rebase
-          
-          # Les chemins d'accès aux fichiers de tags sont corrects
           BACKEND_TAG=$(cat artifacts/backend-tag-artifact/backend_tag.txt)
           FRONTEND_TAG=$(cat artifacts/frontend-tag-artifact/frontend_tag.txt)
-          POPULATE_TAG=$(cat artifacts/populate-tag-artifact/populate_tag.txt)
-          
+          POPULATE_TAG=$(cat artifacts/populate-tag-artifact/populate_tag.txt)         
           sed -i "s|\(image: .*iovision-repo:\).*|\1${BACKEND_TAG}|" kubernetes-manifest/backend.yaml
           sed -i "s|\(image: .*quiz-app-repo:\).*|\1${FRONTEND_TAG}|" kubernetes-manifest/frontend.yaml
-          sed -i "s|\(image: .*populate-repo:\).*|\1${POPULATE_TAG}|" kubernetes-manifest/populate-job.yaml
-          
+          sed -i "s|\(image: .*populate-repo:\).*|\1${POPULATE_TAG}|" kubernetes-manifest/populate-job.yaml         
           git add kubernetes-manifest/
           if git diff --cached --quiet; then
             echo "No changes to production manifests to commit."
