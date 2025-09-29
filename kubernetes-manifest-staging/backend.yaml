@@ -21,7 +21,7 @@ spec:
       containers:
       - name: backend
         # Le tag de l'image sera remplacé par la pipeline CI/CD
-        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/iovision-repo:backend-e28741f2
+        image: 228578233417.dkr.ecr.us-east-1.amazonaws.com/iovision-repo:backend-19372b1e
         ports:
         - containerPort: 3000
         env:
