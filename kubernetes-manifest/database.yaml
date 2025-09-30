@@ -61,10 +61,7 @@ spec:
     targetPort: 27017
   type: ClusterIP
 ---
-# ===================================================================
-# AJOUT : Définition du PersistentVolumeClaim pour le stockage dynamique.
-# Ce bloc remplace le PVC qui se trouvait dans database-persistence.yaml.
-# ===================================================================
+
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
