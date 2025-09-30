@@ -73,6 +73,5 @@ spec:
   resources:
     requests:
       storage: 1Gi
-  # CHANGEMENT CRUCIAL : On spécifie le nom de la StorageClass que Terraform a créée.
   storageClassName: "ebs-storage-class"
 
