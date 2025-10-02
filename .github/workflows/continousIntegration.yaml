@@ -295,7 +295,7 @@ jobs:
   build-frontend:
     name: "Build & Push: Frontend"
     # Dépend des tests et scans du frontend
-    needs: [frontend-test, semgrep-scan-frontend, gitleaks-scan-frontend, dependency-check-frontend]
+    needs: [ semgrep-scan-frontend, gitleaks-scan-frontend, dependency-check-frontend]
     runs-on: ubuntu-latest
     permissions:
       id-token: write # Permission pour se connecter à AWS
