@@ -10,10 +10,10 @@ spec:
   source:
     repoURL: 'https://github.com/wissNasri/app.git'
     targetRevision: HEAD
-    path: kubernetes-manifest # Le répertoire pour l'environnement de production
+    path: kubernetes-manifest 
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: quiz # Le namespace cible pour la production
+    namespace: quiz
   syncPolicy:
     automated:
       prune: true
